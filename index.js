@@ -1,0 +1,354 @@
+require('dotenv').config();
+const path = require('path');
+const {
+  makeWASocket,
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
+} = require('@whiskeysockets/baileys');
+const pino = require('pino');
+const qrcode = require('qrcode-terminal');
+
+const { chat, extraerDatos } = require('./src/claude');
+const memory = require('./src/memory');
+const scheduler = require('./src/scheduler');
+const guardias = require('./src/guardias');
+
+const SESSION_PATH = process.env.SESSION_PATH || path.join(__dirname, 'sessions');
+
+// Crear la carpeta de sesión si no existe
+const fs = require('fs');
+if (!fs.existsSync(SESSION_PATH)) {
+  fs.mkdirSync(SESSION_PATH, { recursive: true });
+}
+const NUMEROS_AUTORIZADOS = (process.env.NUMEROS_AUTORIZADOS || '').split(',').map(n => n.trim()).filter(Boolean);
+
+const TRIGGERS = [
+  'HANDOFF_PROPIETARIO',
+  'HANDOFF_IMBABURA_NICOLE',
+  'FOLLOWUP_PROPIETARIO',
+  'FOLLOWUP_PROPIETARIO_FUERA_COBERTURA',
+  'HANDOFF_ASESOR',
+  'FOLLOWUP_ASESOR',
+  'HANDOFF_COMPRADOR',
+  'HANDOFF_ARRENDATARIO',
+  'HANDOFF_GENERAL',
+  'CONSENT_GRANTED',
+];
+
+function extractTrigger(text) {
+  for (const t of TRIGGERS) {
+    if (text.includes(`[${t}]`)) return t;
+  }
+  return null;
+}
+
+function cleanResponse(text) {
+  let cleaned = text;
+  for (const t of TRIGGERS) {
+    cleaned = cleaned.replace(`[${t}]`, '').trim();
+  }
+  return cleaned;
+}
+
+function formatResumenAsesor(telefono, datos) {
+  return `🔔 Nuevo prospecto asesor calificado
+
+Nombre: ${datos.nombre || '-'} · ${telefono}
+Edad: ${datos.edad || '-'}
+Ciudad: ${datos.ciudad || '-'}
+
+Experiencia: ${datos.experiencia || '-'}
+Situación actual: ${datos.situacion || '-'}
+Disponibilidad: ${datos.disponibilidad || '-'}
+Motivación: ${datos.motivacion || '-'}
+Otra inmobiliaria: ${datos.otraInmobiliaria || '-'}
+Fondo inicial: ${datos.fondoInicial || '-'}
+Modelo comisión: ${datos.modeloComision || '-'}
+
+[Le compartí el test DISC y le pedí su hoja de vida. Queda a la espera de tu contacto.]`;
+}
+
+function formatResumenComprador(telefono, datos) {
+  return `🔔 Nuevo lead comprador
+
+Contacto: ${datos.nombre || '-'} · ${telefono}
+Tipo: ${datos.tipo || '-'}
+Sector: ${datos.sector || '-'}
+Dormitorios: ${datos.dormitorios || '-'}
+Presupuesto: ${datos.presupuesto || '-'}`;
+}
+
+function formatResumenArrendatario(telefono, datos) {
+  return `🔔 Nuevo lead arrendatario
+
+Contacto: ${datos.nombre || '-'} · ${telefono}
+Tipo: ${datos.tipo || '-'}
+Sector: ${datos.sector || '-'}
+Dormitorios: ${datos.dormitorios || '-'}
+Presupuesto mensual: ${datos.presupuesto || '-'}`;
+}
+
+async function handleTrigger(sock, trigger, remitente, datos) {
+  const numeroLimpio = remitente.replace('@s.whatsapp.net', '');
+
+  try {
+    switch (trigger) {
+      case 'HANDOFF_PROPIETARIO': {
+        const asesor = await guardias.getAsesorDeGuardia();
+        if (asesor) {
+          const resumen = require('./src/scheduler').formatResumenPropietario(numeroLimpio, datos);
+          await sock.sendMessage(asesor.whatsapp + '@s.whatsapp.net', { text: resumen });
+          memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+          console.log(`[handoff] Propietario derivado a ${asesor.nombre}`);
+        } else {
+          memory.set(numeroLimpio, {
+            followupPendiente: true,
+            datos: { ...datos, handoffListo: true },
+          });
+          console.log('[handoff] Fuera de horario — lead encolado');
+        }
+        break;
+      }
+
+      case 'HANDOFF_IMBABURA_NICOLE': {
+        const resumen = require('./src/scheduler').formatResumenPropietario(numeroLimpio, { ...datos, zona: 'Imbabura' });
+        if (process.env.WHATSAPP_NICOLE) {
+          await sock.sendMessage(process.env.WHATSAPP_NICOLE + '@s.whatsapp.net', { text: resumen });
+        }
+        memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+        console.log(`[handoff] Propietario Imbabura derivado a Nicole`);
+        break;
+      }
+
+      case 'FOLLOWUP_PROPIETARIO': {
+        memory.set(numeroLimpio, {
+          followupPendiente: true,
+          datos: { ...datos, handoffListo: true },
+        });
+        console.log('[followup] Propietario encolado para próximo turno');
+        break;
+      }
+
+      case 'FOLLOWUP_PROPIETARIO_FUERA_COBERTURA': {
+        memory.set(numeroLimpio, {
+          datos: { ...datos, fueraCobertura: true },
+        });
+        console.log('[followup] Propietario fuera de cobertura — registrado para 30 días');
+        break;
+      }
+
+      case 'HANDOFF_ASESOR': {
+        const resumen = formatResumenAsesor(numeroLimpio, datos);
+        if (process.env.WHATSAPP_NICOLE) {
+          await sock.sendMessage(process.env.WHATSAPP_NICOLE + '@s.whatsapp.net', { text: resumen });
+        }
+        if (process.env.WHATSAPP_GRUPO_RECLUTAMIENTO) {
+          await sock.sendMessage(process.env.WHATSAPP_GRUPO_RECLUTAMIENTO + '@g.us', { text: resumen });
+        }
+        memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+        console.log(`[handoff] Asesor derivado a Nicole`);
+        break;
+      }
+
+      case 'FOLLOWUP_ASESOR': {
+        memory.set(numeroLimpio, {
+          datos: { ...datos, descalificado: datos.descalificado || false },
+        });
+        console.log('[followup] Asesor registrado para follow-up');
+        break;
+      }
+
+      case 'HANDOFF_COMPRADOR': {
+        if (process.env.WHATSAPP_BACKUP) {
+          const resumen = formatResumenComprador(numeroLimpio, datos);
+          await sock.sendMessage(process.env.WHATSAPP_BACKUP + '@s.whatsapp.net', { text: resumen });
+        }
+        memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+        break;
+      }
+
+      case 'HANDOFF_ARRENDATARIO': {
+        if (process.env.WHATSAPP_BACKUP) {
+          const resumen = formatResumenArrendatario(numeroLimpio, datos);
+          await sock.sendMessage(process.env.WHATSAPP_BACKUP + '@s.whatsapp.net', { text: resumen });
+        }
+        memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+        break;
+      }
+
+      case 'HANDOFF_GENERAL': {
+        if (process.env.WHATSAPP_BACKUP) {
+          const texto = `🔔 Consulta general\n\nContacto: ${numeroLimpio}\nMensaje sin flujo definido. Requiere atención manual.`;
+          await sock.sendMessage(process.env.WHATSAPP_BACKUP + '@s.whatsapp.net', { text: texto });
+        }
+        break;
+      }
+    }
+  } catch (e) {
+    console.error(`[handoff] Error procesando ${trigger}:`, e.message);
+  }
+}
+
+function handleOverrideCommand(texto, remitente) {
+  const numeroLimpio = remitente.replace('@s.whatsapp.net', '');
+  if (!NUMEROS_AUTORIZADOS.includes(numeroLimpio)) return false;
+
+  // Formato: !guardia nombre completo 593XXXXXXXXX HH:MM
+  const match = texto.match(/^!guardia\s+(.+?)\s+(593\d{9})\s+(\d{1,2}:\d{2})$/i);
+  if (!match) return 'formato_incorrecto';
+
+  const nombre = match[1].trim();
+  const telefono = match[2].trim();
+  const hora = match[3].trim();
+  guardias.setOverride(nombre, telefono, hora);
+  return true;
+}
+
+let isConnecting = false;
+
+async function connectToWhatsApp() {
+  if (isConnecting) return;
+  isConnecting = true;
+
+  const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
+  const { version } = await fetchLatestBaileysVersion();
+
+  const sock = makeWASocket({
+    version,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
+    },
+    logger: pino({ level: 'silent' }),
+    generateHighQualityLinkPreview: false,
+    getMessage: async (key) => {
+      return { conversation: '' };
+    },
+  });
+
+  sock.ev.on('creds.update', saveCreds);
+
+
+  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+    if (qr) {
+      console.log('\n📱 Escaneá este QR con WhatsApp → Dispositivos vinculados:\n');
+      qrcode.generate(qr, { small: true });
+    }
+    if (connection === 'close') {
+      isConnecting = false;
+      const shouldReconnect =
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.log('[ws] Conexión cerrada. Reconectando:', shouldReconnect);
+      if (shouldReconnect) {
+        setTimeout(() => connectToWhatsApp(), 3000); // espera 3s antes de reconectar
+      }
+    } else if (connection === 'open') {
+      isConnecting = false;
+      console.log('[ws] Conectado a WhatsApp ✅');
+      scheduler.init(sock);
+    }
+  });
+
+  sock.ev.process(async (events) => {
+    if (!events['messages.upsert']) return;
+    const { messages, type } = events['messages.upsert'];
+    if (type !== 'notify') return;
+
+    for (const msg of messages) {
+      if (msg.key.fromMe) continue;
+      if (!msg.message) continue;
+
+      const remitente = msg.key.remoteJid;
+      if (!remitente || remitente.endsWith('@g.us')) continue; // ignorar grupos
+
+      const texto =
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        '';
+
+      if (!texto) continue;
+
+      console.log(`[msg] ${remitente}: ${texto}`);
+
+      // Override de guardia
+      if (texto.startsWith('!guardia')) {
+        const procesado = handleOverrideCommand(texto, remitente);
+        if (procesado === true) {
+          await sock.sendMessage(remitente, { text: '✅ Override de guardia activado.' });
+        } else if (procesado === 'formato_incorrecto') {
+          await sock.sendMessage(remitente, {
+            text: '⚠️ Formato incorrecto. Usá:\n!guardia Nombre Apellido 593XXXXXXXXX HH:MM\n\nEjemplo:\n!guardia Carlos López 593987654321 17:30',
+          });
+        }
+        continue;
+      }
+
+      const numeroLimpio = remitente.replace('@s.whatsapp.net', '');
+      const estado = memory.get(numeroLimpio);
+
+      // Agregar mensaje al historial
+      memory.addMessage(numeroLimpio, 'user', texto);
+
+      let historial = estado.historial.filter(m => m.role === 'user' || m.role === 'assistant');
+
+      // Llamar a Claude
+      let respuesta;
+      try {
+        respuesta = await chat(historial);
+      } catch (e) {
+        console.error('[claude] Error:', e.message);
+        await sock.sendMessage(remitente, {
+          text: 'Hubo un inconveniente técnico. Por favor intente nuevamente en unos minutos.',
+        });
+        continue;
+      }
+
+      // Detectar triggers (CONSENT_GRANTED se procesa aparte — puede venir junto a otro trigger)
+      const trigger = extractTrigger(respuesta);
+      const consentEnEstaRespuesta = respuesta.includes('[CONSENT_GRANTED]');
+      const textoLimpio = cleanResponse(respuesta);
+
+      // Guardar respuesta en historial
+      memory.addMessage(numeroLimpio, 'assistant', respuesta);
+
+      // Marcar consentimiento si aplica
+      if (consentEnEstaRespuesta) {
+        memory.set(numeroLimpio, { consentimiento: true });
+        console.log(`[consent] Consentimiento registrado para ${numeroLimpio}`);
+      }
+
+      // Enviar respuesta al usuario
+      if (textoLimpio) {
+        await sock.sendMessage(remitente, { text: textoLimpio });
+      }
+
+      // Procesar trigger principal (excluye CONSENT_GRANTED que ya fue manejado arriba)
+      if (trigger && trigger !== 'CONSENT_GRANTED') {
+        const estadoActual = memory.get(numeroLimpio);
+
+        // Detectar flujo desde el trigger para extraer datos correctamente
+        const flujoDelTrigger =
+          trigger.includes('PROPIETARIO') || trigger.includes('IMBABURA') ? 'propietario' :
+          trigger.includes('ASESOR') ? 'asesor' :
+          trigger.includes('COMPRADOR') ? 'comprador' :
+          trigger.includes('ARRENDATARIO') ? 'arrendatario' : null;
+
+        let datosExtraidos = estadoActual.datos || {};
+        if (flujoDelTrigger) {
+          const historialActual = estadoActual.historial.filter(m => m.role === 'user' || m.role === 'assistant');
+          const extraidos = await extraerDatos(historialActual, flujoDelTrigger);
+          datosExtraidos = { ...datosExtraidos, ...extraidos };
+          memory.set(numeroLimpio, { datos: datosExtraidos });
+        }
+
+        await handleTrigger(sock, trigger, remitente, datosExtraidos);
+      }
+    }
+  });
+
+  return sock;
+}
+
+connectToWhatsApp().catch(console.error);

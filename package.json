@@ -1,0 +1,17 @@
+{
+  "name": "remax-impacta-agent",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc12",
+    "dotenv": "^16.0.0",
+    "googleapis": "^144.0.0",
+    "node-cron": "^3.0.0",
+    "pino": "^9.0.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
