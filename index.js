@@ -9,6 +9,8 @@ const {
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
+const http = require('http');
 
 const { chat, extraerDatos } = require('./src/claude');
 const memory = require('./src/memory');
@@ -207,6 +209,50 @@ function handleOverrideCommand(texto, remitente) {
 }
 
 let isConnecting = false;
+let lastQR = null;
+let waConnected = false;
+
+function startQRServer() {
+  const server = http.createServer(async (req, res) => {
+    if (req.url !== '/qr' && req.url !== '/') {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+
+    if (waConnected) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end('<h2>✅ WhatsApp ya está conectado.</h2>');
+      return;
+    }
+
+    if (!lastQR) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end('<h2>Generando QR... refrescá en unos segundos.</h2>');
+      return;
+    }
+
+    try {
+      const dataUrl = await QRCode.toDataURL(lastQR, { width: 320 });
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`
+        <html>
+          <head><meta http-equiv="refresh" content="20"></head>
+          <body style="display:flex;flex-direction:column;align-items:center;font-family:sans-serif;margin-top:40px;">
+            <h2>Escaneá con WhatsApp → Dispositivos vinculados</h2>
+            <img src="${dataUrl}" />
+          </body>
+        </html>
+      `);
+    } catch (e) {
+      res.writeHead(500);
+      res.end('Error generando QR: ' + e.message);
+    }
+  });
+
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, () => console.log(`[qr] Servidor QR escuchando en puerto ${PORT}`));
+}
 
 async function connectToWhatsApp() {
   if (isConnecting) return;
@@ -233,11 +279,13 @@ async function connectToWhatsApp() {
 
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      console.log('\n📱 Escaneá este QR con WhatsApp → Dispositivos vinculados:\n');
+      lastQR = qr;
+      console.log('\n📱 Escaneá este QR con WhatsApp → Dispositivos vinculados (o abrí /qr en el navegador):\n');
       qrcode.generate(qr, { small: true });
     }
     if (connection === 'close') {
       isConnecting = false;
+      waConnected = false;
       const shouldReconnect =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
       console.log('[ws] Conexión cerrada. Reconectando:', shouldReconnect);
@@ -246,6 +294,8 @@ async function connectToWhatsApp() {
       }
     } else if (connection === 'open') {
       isConnecting = false;
+      waConnected = true;
+      lastQR = null;
       console.log('[ws] Conectado a WhatsApp ✅');
       scheduler.init(sock);
     }
@@ -351,4 +401,5 @@ async function connectToWhatsApp() {
   return sock;
 }
 
+startQRServer();
 connectToWhatsApp().catch(console.error);
