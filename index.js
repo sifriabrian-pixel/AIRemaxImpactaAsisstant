@@ -399,6 +399,12 @@ async function connectToWhatsApp() {
 
       const remitente = msg.key.remoteJid;
       if (!remitente || remitente.endsWith('@g.us')) continue; // ignorar grupos
+      if (remitente.endsWith('@lid')) {
+        // Contactos con número oculto (@lid). Responderles hace que Baileys
+        // rc13 fuerce un logout de toda la sesión — los ignoramos por ahora.
+        console.log(`[msg] Ignorado contacto @lid: ${remitente}`);
+        continue;
+      }
 
       const texto =
         msg.message?.conversation ||
@@ -463,7 +469,11 @@ async function connectToWhatsApp() {
 
       // Enviar respuesta al usuario
       if (textoLimpio) {
-        await sock.sendMessage(remitente, { text: textoLimpio });
+        try {
+          await sock.sendMessage(remitente, { text: textoLimpio });
+        } catch (e) {
+          console.error(`[ws] Error enviando mensaje a ${remitente}:`, e.message);
+        }
       }
 
       // Procesar trigger principal (excluye CONSENT_GRANTED que ya fue manejado arriba)
