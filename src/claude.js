@@ -9,7 +9,7 @@ const systemPrompt = systemPromptBase + getFAQPrompt();
 
 async function chat(historial) {
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 1024,
     system: [
       { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
@@ -83,7 +83,7 @@ async function extraerDatos(historial, flujo) {
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 512,
       system: 'Sos un extractor de datos. Analizás conversaciones de WhatsApp y extraés datos estructurados en JSON. Solo devolvés el JSON, sin texto adicional, sin markdown.',
       messages: [
