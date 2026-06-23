@@ -1,5 +1,6 @@
 node_modules/
 sessions/
 memory.json
+stats.json
 .env
 package-lock.json

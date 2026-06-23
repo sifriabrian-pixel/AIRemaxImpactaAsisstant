@@ -16,6 +16,7 @@ const { chat, extraerDatos } = require('./src/claude');
 const memory = require('./src/memory');
 const scheduler = require('./src/scheduler');
 const guardias = require('./src/guardias');
+const stats = require('./src/stats');
 
 const SESSION_PATH = process.env.SESSION_PATH || path.join(__dirname, 'sessions');
 
@@ -103,12 +104,14 @@ async function handleTrigger(sock, trigger, remitente, datos) {
           const resumen = require('./src/scheduler').formatResumenPropietario(numeroLimpio, datos);
           await sock.sendMessage(asesor.whatsapp + '@s.whatsapp.net', { text: resumen });
           memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+          stats.logEvent('handoff_propietario', numeroLimpio);
           console.log(`[handoff] Propietario derivado a ${asesor.nombre}`);
         } else {
           memory.set(numeroLimpio, {
             followupPendiente: true,
             datos: { ...datos, handoffListo: true },
           });
+          stats.logEvent('fuera_horario', numeroLimpio);
           console.log('[handoff] Fuera de horario — lead encolado');
         }
         break;
@@ -120,6 +123,7 @@ async function handleTrigger(sock, trigger, remitente, datos) {
           await sock.sendMessage(process.env.WHATSAPP_NICOLE + '@s.whatsapp.net', { text: resumen });
         }
         memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+        stats.logEvent('handoff_imbabura', numeroLimpio);
         console.log(`[handoff] Propietario Imbabura derivado a Nicole`);
         break;
       }
@@ -129,6 +133,7 @@ async function handleTrigger(sock, trigger, remitente, datos) {
           followupPendiente: true,
           datos: { ...datos, handoffListo: true },
         });
+        stats.logEvent('fuera_horario', numeroLimpio);
         console.log('[followup] Propietario encolado para próximo turno');
         break;
       }
@@ -150,6 +155,7 @@ async function handleTrigger(sock, trigger, remitente, datos) {
           await sock.sendMessage(process.env.WHATSAPP_GRUPO_RECLUTAMIENTO + '@g.us', { text: resumen });
         }
         memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+        stats.logEvent('handoff_asesor', numeroLimpio);
         console.log(`[handoff] Asesor derivado a Nicole`);
         break;
       }
@@ -168,6 +174,7 @@ async function handleTrigger(sock, trigger, remitente, datos) {
           await sock.sendMessage(process.env.WHATSAPP_BACKUP + '@s.whatsapp.net', { text: resumen });
         }
         memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+        stats.logEvent('handoff_comprador', numeroLimpio);
         break;
       }
 
@@ -177,6 +184,7 @@ async function handleTrigger(sock, trigger, remitente, datos) {
           await sock.sendMessage(process.env.WHATSAPP_BACKUP + '@s.whatsapp.net', { text: resumen });
         }
         memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+        stats.logEvent('handoff_arrendatario', numeroLimpio);
         break;
       }
 
@@ -185,6 +193,7 @@ async function handleTrigger(sock, trigger, remitente, datos) {
           const texto = `🔔 Consulta general\n\nContacto: ${numeroLimpio}\nMensaje sin flujo definido. Requiere atención manual.`;
           await sock.sendMessage(process.env.WHATSAPP_BACKUP + '@s.whatsapp.net', { text: texto });
         }
+        stats.logEvent('handoff_general', numeroLimpio);
         break;
       }
     }
@@ -212,8 +221,73 @@ let isConnecting = false;
 let lastQR = null;
 let waConnected = false;
 
+function renderStatsPage(fechaFiltro) {
+  const s = stats.getStats(fechaFiltro);
+  const desde = new Date(s.instaladoDesde).toLocaleDateString('es-EC');
+  const actualizado = new Date().toLocaleString('es-EC');
+
+  const box = (valor, label) => `
+    <div style="background:#f3f4f6;border-radius:12px;padding:24px;text-align:center;">
+      <div style="font-size:32px;font-weight:800;color:#0b3d2e;">${valor}</div>
+      <div style="color:#555;margin-top:4px;">${label}</div>
+    </div>`;
+
+  const flujoLabels = {
+    propietario: 'Propietarios',
+    asesor: 'Prospectos asesor',
+    comprador: 'Compradores',
+    arrendatario: 'Arrendatarios',
+  };
+  const filasFlujo = Object.entries(s.porFlujo)
+    .map(([flujo, cantidad]) => `<tr><td style="padding:4px 12px;">${flujoLabels[flujo] || flujo}</td><td style="padding:4px 12px;text-align:right;font-weight:700;">${cantidad}</td></tr>`)
+    .join('');
+
+  return `
+    <html>
+      <head>
+        <meta http-equiv="refresh" content="60">
+        <meta charset="utf-8">
+      </head>
+      <body style="background:#0b3d2e;min-height:100vh;margin:0;display:flex;justify-content:center;align-items:flex-start;padding:40px 16px;font-family:sans-serif;">
+        <div style="background:white;border-radius:20px;padding:32px;max-width:600px;width:100%;">
+          <h2 style="margin:0;color:#0b3d2e;">🏠 REMAX Impacta — Valentina</h2>
+          <p style="color:#666;margin-top:4px;">Estadísticas del agente desde ${desde}</p>
+
+          <form method="GET" action="/stats" style="margin:16px 0;display:flex;gap:8px;align-items:center;">
+            <input type="date" name="fecha" value="${fechaFiltro || ''}" style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;">
+            <button type="submit" style="padding:6px 14px;border-radius:8px;border:none;background:#0b3d2e;color:white;cursor:pointer;">Filtrar</button>
+            <a href="/stats" style="color:#0b3d2e;text-decoration:underline;">Ver todo</a>
+          </form>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;">
+            ${box(s.leadsAtendidos, 'Leads atendidos')}
+            ${box(s.fichasEnviadas, 'Fichas enviadas')}
+            ${box(s.leadsDerivados, 'Leads derivados')}
+            ${box(s.fueraHorario, 'Fuera de horario')}
+          </div>
+
+          <h3 style="color:#0b3d2e;margin-top:28px;">Desglose por tipo de lead</h3>
+          <table style="width:100%;border-collapse:collapse;">${filasFlujo}</table>
+
+          <hr style="margin-top:24px;border:none;border-top:1px solid #eee;">
+          <p style="color:#999;font-size:13px;text-align:center;">Actualizado: ${actualizado} · Se refresca cada 60s</p>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
 function startQRServer() {
   const server = http.createServer(async (req, res) => {
+    const parsedUrl = new URL(req.url, 'http://localhost');
+
+    if (parsedUrl.pathname === '/stats') {
+      const fechaFiltro = parsedUrl.searchParams.get('fecha') || null;
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(renderStatsPage(fechaFiltro));
+      return;
+    }
+
     if (req.url !== '/qr' && req.url !== '/') {
       res.writeHead(404);
       res.end('Not found');
@@ -338,6 +412,11 @@ async function connectToWhatsApp() {
       const numeroLimpio = remitente.replace('@s.whatsapp.net', '');
       const estado = memory.get(numeroLimpio);
 
+      // Si es el primer mensaje de este número, registrar lead atendido
+      if (estado.historial.length === 0) {
+        stats.logEvent('lead_atendido', numeroLimpio);
+      }
+
       // Agregar mensaje al historial
       memory.addMessage(numeroLimpio, 'user', texto);
 
@@ -387,6 +466,7 @@ async function connectToWhatsApp() {
 
         let datosExtraidos = estadoActual.datos || {};
         if (flujoDelTrigger) {
+          stats.logEvent(`flujo_${flujoDelTrigger}`, numeroLimpio);
           const historialActual = estadoActual.historial.filter(m => m.role === 'user' || m.role === 'assistant');
           const extraidos = await extraerDatos(historialActual, flujoDelTrigger);
           datosExtraidos = { ...datosExtraidos, ...extraidos };
