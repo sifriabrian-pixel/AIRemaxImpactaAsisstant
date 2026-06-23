@@ -365,6 +365,17 @@ async function connectToWhatsApp() {
       console.log('[ws] Conexión cerrada. Reconectando:', shouldReconnect);
       if (shouldReconnect) {
         setTimeout(() => connectToWhatsApp(), 3000); // espera 3s antes de reconectar
+      } else {
+        // Sesión deslogueada: las credenciales viejas ya no sirven.
+        // Las borramos para que se genere un QR nuevo automáticamente.
+        console.log('[ws] Sesión deslogueada — limpiando credenciales para generar QR nuevo');
+        try {
+          fs.rmSync(SESSION_PATH, { recursive: true, force: true });
+          fs.mkdirSync(SESSION_PATH, { recursive: true });
+        } catch (e) {
+          console.error('[ws] Error limpiando sesión:', e.message);
+        }
+        setTimeout(() => connectToWhatsApp(), 3000);
       }
     } else if (connection === 'open') {
       isConnecting = false;
