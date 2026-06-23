@@ -367,11 +367,13 @@ async function connectToWhatsApp() {
         setTimeout(() => connectToWhatsApp(), 3000); // espera 3s antes de reconectar
       } else {
         // Sesión deslogueada: las credenciales viejas ya no sirven.
-        // Las borramos para que se genere un QR nuevo automáticamente.
+        // Borramos solo el CONTENIDO de SESSION_PATH (no la carpeta en sí,
+        // que es el punto de montaje del volumen y no se puede eliminar).
         console.log('[ws] Sesión deslogueada — limpiando credenciales para generar QR nuevo');
         try {
-          fs.rmSync(SESSION_PATH, { recursive: true, force: true });
-          fs.mkdirSync(SESSION_PATH, { recursive: true });
+          for (const entry of fs.readdirSync(SESSION_PATH)) {
+            fs.rmSync(path.join(SESSION_PATH, entry), { recursive: true, force: true });
+          }
         } catch (e) {
           console.error('[ws] Error limpiando sesión:', e.message);
         }
