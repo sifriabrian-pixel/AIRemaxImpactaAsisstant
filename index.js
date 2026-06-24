@@ -418,8 +418,24 @@ async function connectToWhatsApp() {
       if (msg.key.fromMe) continue;
       if (!msg.message) continue;
 
-      const remitente = msg.key.remoteJid;
+      let remitente = msg.key.remoteJid;
       if (!remitente || remitente.endsWith('@g.us')) continue; // ignorar grupos
+
+      // Contactos @lid: resolver al número de teléfono real y operar con ese
+      // JID. Responder directo al @lid es lo que rompía la sesión.
+      if (remitente.endsWith('@lid')) {
+        try {
+          const pn = await sock.signalRepository?.lidMapping?.getPNForLID(remitente);
+          if (pn) {
+            console.log(`[lid] Resuelto ${remitente} → ${pn}`);
+            remitente = pn;
+          } else {
+            console.log(`[lid] No se pudo resolver ${remitente}, se procesa igual con el lid`);
+          }
+        } catch (e) {
+          console.error('[lid] Error resolviendo LID:', e.message);
+        }
+      }
 
       if (blacklist.has(remitente)) {
         console.log(`[msg] Ignorado (en lista negra, causó un logout antes): ${remitente}`);
