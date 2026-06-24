@@ -17,6 +17,7 @@ const memory = require('./src/memory');
 const scheduler = require('./src/scheduler');
 const guardias = require('./src/guardias');
 const stats = require('./src/stats');
+const blacklist = require('./src/blacklist');
 
 const SESSION_PATH = process.env.SESSION_PATH || path.join(__dirname, 'sessions');
 
@@ -221,6 +222,7 @@ let isConnecting = false;
 let lastQR = null;
 let waConnected = false;
 let reconnectAttempts = 0;
+let procesandoJid = null; // jid del contacto cuyo mensaje se está procesando ahora
 const MAX_RECONNECT_DELAY = 5 * 60 * 1000; // tope de 5 minutos entre reintentos
 
 function nextDelay() {
@@ -376,6 +378,13 @@ async function connectToWhatsApp() {
         setTimeout(() => connectToWhatsApp(), delay);
       } else {
         // Sesión deslogueada: las credenciales viejas ya no sirven.
+        // Si justo se estaba procesando un mensaje de algún contacto, lo
+        // agregamos a la lista negra — es la causa más probable del logout
+        // (bug conocido de Baileys con ciertos contactos @lid).
+        if (procesandoJid) {
+          blacklist.add(procesandoJid);
+          procesandoJid = null;
+        }
         // Borramos solo el CONTENIDO de SESSION_PATH (no la carpeta en sí,
         // que es el punto de montaje del volumen y no se puede eliminar).
         console.log('[ws] Sesión deslogueada — limpiando credenciales para generar QR nuevo');
@@ -412,6 +421,11 @@ async function connectToWhatsApp() {
       const remitente = msg.key.remoteJid;
       if (!remitente || remitente.endsWith('@g.us')) continue; // ignorar grupos
 
+      if (blacklist.has(remitente)) {
+        console.log(`[msg] Ignorado (en lista negra, causó un logout antes): ${remitente}`);
+        continue;
+      }
+
       const texto =
         msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||
@@ -420,6 +434,7 @@ async function connectToWhatsApp() {
       if (!texto) continue;
 
       console.log(`[msg] ${remitente}: ${texto}`);
+      procesandoJid = remitente;
 
       // Override de guardia
       if (texto.startsWith('!guardia')) {
@@ -431,6 +446,7 @@ async function connectToWhatsApp() {
             text: '⚠️ Formato incorrecto. Usá:\n!guardia Nombre Apellido 593XXXXXXXXX HH:MM\n\nEjemplo:\n!guardia Carlos López 593987654321 17:30',
           });
         }
+        procesandoJid = null;
         continue;
       }
 
@@ -504,6 +520,8 @@ async function connectToWhatsApp() {
 
         await handleTrigger(sock, trigger, remitente, datosExtraidos);
       }
+
+      procesandoJid = null;
     }
   });
 
