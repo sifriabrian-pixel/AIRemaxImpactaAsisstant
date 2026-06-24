@@ -220,6 +220,13 @@ function handleOverrideCommand(texto, remitente) {
 let isConnecting = false;
 let lastQR = null;
 let waConnected = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_DELAY = 5 * 60 * 1000; // tope de 5 minutos entre reintentos
+
+function nextDelay() {
+  reconnectAttempts++;
+  return Math.min(3000 * 2 ** (reconnectAttempts - 1), MAX_RECONNECT_DELAY);
+}
 
 function renderStatsPage(fechaFiltro) {
   const s = stats.getStats(fechaFiltro);
@@ -364,7 +371,9 @@ async function connectToWhatsApp() {
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
       console.log('[ws] Conexión cerrada. Reconectando:', shouldReconnect);
       if (shouldReconnect) {
-        setTimeout(() => connectToWhatsApp(), 3000); // espera 3s antes de reconectar
+        const delay = nextDelay();
+        console.log(`[ws] Reintentando en ${Math.round(delay / 1000)}s (intento ${reconnectAttempts})`);
+        setTimeout(() => connectToWhatsApp(), delay);
       } else {
         // Sesión deslogueada: las credenciales viejas ya no sirven.
         // Borramos solo el CONTENIDO de SESSION_PATH (no la carpeta en sí,
@@ -377,12 +386,15 @@ async function connectToWhatsApp() {
         } catch (e) {
           console.error('[ws] Error limpiando sesión:', e.message);
         }
-        setTimeout(() => connectToWhatsApp(), 3000);
+        const delay = nextDelay();
+        console.log(`[ws] Reintentando en ${Math.round(delay / 1000)}s (intento ${reconnectAttempts})`);
+        setTimeout(() => connectToWhatsApp(), delay);
       }
     } else if (connection === 'open') {
       isConnecting = false;
       waConnected = true;
       lastQR = null;
+      reconnectAttempts = 0;
       console.log('[ws] Conectado a WhatsApp ✅');
       scheduler.init(sock);
     }
@@ -399,12 +411,6 @@ async function connectToWhatsApp() {
 
       const remitente = msg.key.remoteJid;
       if (!remitente || remitente.endsWith('@g.us')) continue; // ignorar grupos
-      if (remitente.endsWith('@lid')) {
-        // Contactos con número oculto (@lid). Responderles hace que Baileys
-        // rc13 fuerce un logout de toda la sesión — los ignoramos por ahora.
-        console.log(`[msg] Ignorado contacto @lid: ${remitente}`);
-        continue;
-      }
 
       const texto =
         msg.message?.conversation ||
