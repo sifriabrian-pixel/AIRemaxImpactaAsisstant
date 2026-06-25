@@ -1,15 +1,4 @@
 require('dotenv').config();
-const path = require('path');
-const {
-  makeWASocket,
-  useMultiFileAuthState,
-  DisconnectReason,
-  fetchLatestBaileysVersion,
-  makeCacheableSignalKeyStore,
-} = require('@whiskeysockets/baileys');
-const pino = require('pino');
-const qrcode = require('qrcode-terminal');
-const QRCode = require('qrcode');
 const http = require('http');
 
 const { chat, extraerDatos } = require('./src/claude');
@@ -17,16 +6,10 @@ const memory = require('./src/memory');
 const scheduler = require('./src/scheduler');
 const guardias = require('./src/guardias');
 const stats = require('./src/stats');
-const blacklist = require('./src/blacklist');
+const whatsapp = require('./src/whatsapp');
 
-const SESSION_PATH = process.env.SESSION_PATH || path.join(__dirname, 'sessions');
-
-// Crear la carpeta de sesión si no existe
-const fs = require('fs');
-if (!fs.existsSync(SESSION_PATH)) {
-  fs.mkdirSync(SESSION_PATH, { recursive: true });
-}
 const NUMEROS_AUTORIZADOS = (process.env.NUMEROS_AUTORIZADOS || '').split(',').map(n => n.trim()).filter(Boolean);
+const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
 
 const TRIGGERS = [
   'HANDOFF_PROPIETARIO',
@@ -94,16 +77,14 @@ Dormitorios: ${datos.dormitorios || '-'}
 Presupuesto mensual: ${datos.presupuesto || '-'}`;
 }
 
-async function handleTrigger(sock, trigger, remitente, datos) {
-  const numeroLimpio = remitente.replace('@s.whatsapp.net', '');
-
+async function handleTrigger(trigger, numeroLimpio, datos) {
   try {
     switch (trigger) {
       case 'HANDOFF_PROPIETARIO': {
         const asesor = await guardias.getAsesorDeGuardia();
         if (asesor) {
-          const resumen = require('./src/scheduler').formatResumenPropietario(numeroLimpio, datos);
-          await sock.sendMessage(asesor.whatsapp + '@s.whatsapp.net', { text: resumen });
+          const resumen = scheduler.formatResumenPropietario(numeroLimpio, datos);
+          await whatsapp.sendMessage(asesor.whatsapp, resumen);
           memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
           stats.logEvent('handoff_propietario', numeroLimpio);
           console.log(`[handoff] Propietario derivado a ${asesor.nombre}`);
@@ -119,9 +100,9 @@ async function handleTrigger(sock, trigger, remitente, datos) {
       }
 
       case 'HANDOFF_IMBABURA_NICOLE': {
-        const resumen = require('./src/scheduler').formatResumenPropietario(numeroLimpio, { ...datos, zona: 'Imbabura' });
+        const resumen = scheduler.formatResumenPropietario(numeroLimpio, { ...datos, zona: 'Imbabura' });
         if (process.env.WHATSAPP_NICOLE) {
-          await sock.sendMessage(process.env.WHATSAPP_NICOLE + '@s.whatsapp.net', { text: resumen });
+          await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, resumen);
         }
         memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
         stats.logEvent('handoff_imbabura', numeroLimpio);
@@ -150,10 +131,7 @@ async function handleTrigger(sock, trigger, remitente, datos) {
       case 'HANDOFF_ASESOR': {
         const resumen = formatResumenAsesor(numeroLimpio, datos);
         if (process.env.WHATSAPP_NICOLE) {
-          await sock.sendMessage(process.env.WHATSAPP_NICOLE + '@s.whatsapp.net', { text: resumen });
-        }
-        if (process.env.WHATSAPP_GRUPO_RECLUTAMIENTO) {
-          await sock.sendMessage(process.env.WHATSAPP_GRUPO_RECLUTAMIENTO + '@g.us', { text: resumen });
+          await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, resumen);
         }
         memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
         stats.logEvent('handoff_asesor', numeroLimpio);
@@ -172,7 +150,7 @@ async function handleTrigger(sock, trigger, remitente, datos) {
       case 'HANDOFF_COMPRADOR': {
         if (process.env.WHATSAPP_BACKUP) {
           const resumen = formatResumenComprador(numeroLimpio, datos);
-          await sock.sendMessage(process.env.WHATSAPP_BACKUP + '@s.whatsapp.net', { text: resumen });
+          await whatsapp.sendMessage(process.env.WHATSAPP_BACKUP, resumen);
         }
         memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
         stats.logEvent('handoff_comprador', numeroLimpio);
@@ -182,7 +160,7 @@ async function handleTrigger(sock, trigger, remitente, datos) {
       case 'HANDOFF_ARRENDATARIO': {
         if (process.env.WHATSAPP_BACKUP) {
           const resumen = formatResumenArrendatario(numeroLimpio, datos);
-          await sock.sendMessage(process.env.WHATSAPP_BACKUP + '@s.whatsapp.net', { text: resumen });
+          await whatsapp.sendMessage(process.env.WHATSAPP_BACKUP, resumen);
         }
         memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
         stats.logEvent('handoff_arrendatario', numeroLimpio);
@@ -192,7 +170,7 @@ async function handleTrigger(sock, trigger, remitente, datos) {
       case 'HANDOFF_GENERAL': {
         if (process.env.WHATSAPP_BACKUP) {
           const texto = `🔔 Consulta general\n\nContacto: ${numeroLimpio}\nMensaje sin flujo definido. Requiere atención manual.`;
-          await sock.sendMessage(process.env.WHATSAPP_BACKUP + '@s.whatsapp.net', { text: texto });
+          await whatsapp.sendMessage(process.env.WHATSAPP_BACKUP, texto);
         }
         stats.logEvent('handoff_general', numeroLimpio);
         break;
@@ -203,8 +181,7 @@ async function handleTrigger(sock, trigger, remitente, datos) {
   }
 }
 
-function handleOverrideCommand(texto, remitente) {
-  const numeroLimpio = remitente.replace('@s.whatsapp.net', '');
+function handleOverrideCommand(texto, numeroLimpio) {
   if (!NUMEROS_AUTORIZADOS.includes(numeroLimpio)) return false;
 
   // Formato: !guardia nombre completo 593XXXXXXXXX HH:MM
@@ -218,16 +195,90 @@ function handleOverrideCommand(texto, remitente) {
   return true;
 }
 
-let isConnecting = false;
-let lastQR = null;
-let waConnected = false;
-let reconnectAttempts = 0;
-let procesandoJid = null; // jid del contacto cuyo mensaje se está procesando ahora
-const MAX_RECONNECT_DELAY = 5 * 60 * 1000; // tope de 5 minutos entre reintentos
+async function procesarMensaje(numeroLimpio, texto) {
+  console.log(`[msg] ${numeroLimpio}: ${texto}`);
 
-function nextDelay() {
-  reconnectAttempts++;
-  return Math.min(3000 * 2 ** (reconnectAttempts - 1), MAX_RECONNECT_DELAY);
+  // Override de guardia
+  if (texto.startsWith('!guardia')) {
+    const procesado = handleOverrideCommand(texto, numeroLimpio);
+    if (procesado === true) {
+      await whatsapp.sendMessage(numeroLimpio, '✅ Override de guardia activado.');
+    } else if (procesado === 'formato_incorrecto') {
+      await whatsapp.sendMessage(
+        numeroLimpio,
+        '⚠️ Formato incorrecto. Usá:\n!guardia Nombre Apellido 593XXXXXXXXX HH:MM\n\nEjemplo:\n!guardia Carlos López 593987654321 17:30',
+      );
+    }
+    return;
+  }
+
+  const estado = memory.get(numeroLimpio);
+
+  // Si es el primer mensaje de este número, registrar lead atendido
+  if (estado.historial.length === 0) {
+    stats.logEvent('lead_atendido', numeroLimpio);
+  }
+
+  // Agregar mensaje al historial
+  memory.addMessage(numeroLimpio, 'user', texto);
+
+  const historial = estado.historial.filter(m => m.role === 'user' || m.role === 'assistant');
+
+  // Llamar a Claude
+  let respuesta;
+  try {
+    respuesta = await chat(historial);
+  } catch (e) {
+    console.error('[claude] Error:', e.message);
+    await whatsapp.sendMessage(numeroLimpio, 'Hubo un inconveniente técnico. Por favor intente nuevamente en unos minutos.');
+    return;
+  }
+
+  // Detectar triggers (CONSENT_GRANTED se procesa aparte — puede venir junto a otro trigger)
+  const trigger = extractTrigger(respuesta);
+  const consentEnEstaRespuesta = respuesta.includes('[CONSENT_GRANTED]');
+  const textoLimpio = cleanResponse(respuesta);
+
+  // Guardar respuesta en historial
+  memory.addMessage(numeroLimpio, 'assistant', respuesta);
+
+  // Marcar consentimiento si aplica
+  if (consentEnEstaRespuesta) {
+    memory.set(numeroLimpio, { consentimiento: true });
+    console.log(`[consent] Consentimiento registrado para ${numeroLimpio}`);
+  }
+
+  // Enviar respuesta al usuario
+  if (textoLimpio) {
+    try {
+      await whatsapp.sendMessage(numeroLimpio, textoLimpio);
+    } catch (e) {
+      console.error(`[wa] Error enviando mensaje a ${numeroLimpio}:`, e.message);
+    }
+  }
+
+  // Procesar trigger principal (excluye CONSENT_GRANTED que ya fue manejado arriba)
+  if (trigger && trigger !== 'CONSENT_GRANTED') {
+    const estadoActual = memory.get(numeroLimpio);
+
+    // Detectar flujo desde el trigger para extraer datos correctamente
+    const flujoDelTrigger =
+      trigger.includes('PROPIETARIO') || trigger.includes('IMBABURA') ? 'propietario' :
+      trigger.includes('ASESOR') ? 'asesor' :
+      trigger.includes('COMPRADOR') ? 'comprador' :
+      trigger.includes('ARRENDATARIO') ? 'arrendatario' : null;
+
+    let datosExtraidos = estadoActual.datos || {};
+    if (flujoDelTrigger) {
+      stats.logEvent(`flujo_${flujoDelTrigger}`, numeroLimpio);
+      const historialActual = estadoActual.historial.filter(m => m.role === 'user' || m.role === 'assistant');
+      const extraidos = await extraerDatos(historialActual, flujoDelTrigger);
+      datosExtraidos = { ...datosExtraidos, ...extraidos };
+      memory.set(numeroLimpio, { flujo: flujoDelTrigger, datos: datosExtraidos });
+    }
+
+    await handleTrigger(trigger, numeroLimpio, datosExtraidos);
+  }
 }
 
 function renderStatsPage(fechaFiltro) {
@@ -286,7 +337,16 @@ function renderStatsPage(fechaFiltro) {
   `;
 }
 
-function startQRServer() {
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+function startServer() {
   const server = http.createServer(async (req, res) => {
     const parsedUrl = new URL(req.url, 'http://localhost');
 
@@ -297,252 +357,79 @@ function startQRServer() {
       return;
     }
 
-    if (req.url !== '/qr' && req.url !== '/') {
-      res.writeHead(404);
-      res.end('Not found');
+    // Verificación del webhook (Meta llama esto una vez al configurarlo)
+    if (parsedUrl.pathname === '/webhook' && req.method === 'GET') {
+      const mode = parsedUrl.searchParams.get('hub.mode');
+      const tokenRecibido = parsedUrl.searchParams.get('hub.verify_token');
+      const challenge = parsedUrl.searchParams.get('hub.challenge');
+
+      if (mode === 'subscribe' && tokenRecibido === VERIFY_TOKEN) {
+        console.log('[webhook] Verificación de Meta exitosa');
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end(challenge);
+      } else {
+        console.log('[webhook] Verificación fallida — token no coincide');
+        res.writeHead(403);
+        res.end('Forbidden');
+      }
       return;
     }
 
-    if (waConnected) {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end('<h2>✅ WhatsApp ya está conectado.</h2>');
+    // Mensajes entrantes
+    if (parsedUrl.pathname === '/webhook' && req.method === 'POST') {
+      const rawBody = await readBody(req);
+      const firma = req.headers['x-hub-signature-256'];
+
+      if (!whatsapp.verifySignature(rawBody, firma)) {
+        console.error('[webhook] Firma inválida — mensaje rechazado');
+        res.writeHead(403);
+        res.end('Invalid signature');
+        return;
+      }
+
+      // Responder rápido a Meta; el procesamiento sigue en segundo plano
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('OK');
+
+      let payload;
+      try {
+        payload = JSON.parse(rawBody.toString('utf8'));
+      } catch (e) {
+        console.error('[webhook] Error parseando payload:', e.message);
+        return;
+      }
+
+      for (const entry of payload.entry || []) {
+        for (const change of entry.changes || []) {
+          const mensajes = change.value?.messages || [];
+          for (const msg of mensajes) {
+            if (msg.type !== 'text') continue;
+            const numeroLimpio = msg.from;
+            const texto = msg.text?.body || '';
+            if (!texto) continue;
+
+            procesarMensaje(numeroLimpio, texto).catch((e) =>
+              console.error('[webhook] Error procesando mensaje:', e.message),
+            );
+          }
+        }
+      }
       return;
     }
 
-    if (!lastQR) {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end('<h2>Generando QR... refrescá en unos segundos.</h2>');
+    if (parsedUrl.pathname === '/') {
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Valentina está activa ✅');
       return;
     }
 
-    try {
-      const dataUrl = await QRCode.toDataURL(lastQR, { width: 320 });
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(`
-        <html>
-          <head><meta http-equiv="refresh" content="20"></head>
-          <body style="display:flex;flex-direction:column;align-items:center;font-family:sans-serif;margin-top:40px;">
-            <h2>Escaneá con WhatsApp → Dispositivos vinculados</h2>
-            <img src="${dataUrl}" />
-          </body>
-        </html>
-      `);
-    } catch (e) {
-      res.writeHead(500);
-      res.end('Error generando QR: ' + e.message);
-    }
+    res.writeHead(404);
+    res.end('Not found');
   });
 
   const PORT = process.env.PORT || 3000;
-  server.listen(PORT, () => console.log(`[qr] Servidor QR escuchando en puerto ${PORT}`));
+  server.listen(PORT, () => console.log(`[server] Escuchando en puerto ${PORT}`));
 }
 
-async function connectToWhatsApp() {
-  if (isConnecting) return;
-  isConnecting = true;
-
-  const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
-  const { version } = await fetchLatestBaileysVersion();
-
-  const sock = makeWASocket({
-    version,
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
-    },
-    logger: pino({ level: 'silent' }),
-    generateHighQualityLinkPreview: false,
-    getMessage: async (key) => {
-      return { conversation: '' };
-    },
-  });
-
-  sock.ev.on('creds.update', saveCreds);
-
-
-  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
-    if (qr) {
-      lastQR = qr;
-      console.log('\n📱 Escaneá este QR con WhatsApp → Dispositivos vinculados (o abrí /qr en el navegador):\n');
-      qrcode.generate(qr, { small: true });
-    }
-    if (connection === 'close') {
-      isConnecting = false;
-      waConnected = false;
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log('[ws] Conexión cerrada. Reconectando:', shouldReconnect);
-      if (shouldReconnect) {
-        const delay = nextDelay();
-        console.log(`[ws] Reintentando en ${Math.round(delay / 1000)}s (intento ${reconnectAttempts})`);
-        setTimeout(() => connectToWhatsApp(), delay);
-      } else {
-        // Sesión deslogueada: las credenciales viejas ya no sirven.
-        // Si justo se estaba procesando un mensaje de algún contacto, lo
-        // agregamos a la lista negra — es la causa más probable del logout
-        // (bug conocido de Baileys con ciertos contactos @lid).
-        if (procesandoJid) {
-          blacklist.add(procesandoJid);
-          procesandoJid = null;
-        }
-        // Borramos solo el CONTENIDO de SESSION_PATH (no la carpeta en sí,
-        // que es el punto de montaje del volumen y no se puede eliminar).
-        console.log('[ws] Sesión deslogueada — limpiando credenciales para generar QR nuevo');
-        try {
-          for (const entry of fs.readdirSync(SESSION_PATH)) {
-            fs.rmSync(path.join(SESSION_PATH, entry), { recursive: true, force: true });
-          }
-        } catch (e) {
-          console.error('[ws] Error limpiando sesión:', e.message);
-        }
-        const delay = nextDelay();
-        console.log(`[ws] Reintentando en ${Math.round(delay / 1000)}s (intento ${reconnectAttempts})`);
-        setTimeout(() => connectToWhatsApp(), delay);
-      }
-    } else if (connection === 'open') {
-      isConnecting = false;
-      waConnected = true;
-      lastQR = null;
-      reconnectAttempts = 0;
-      console.log('[ws] Conectado a WhatsApp ✅');
-      scheduler.init(sock);
-    }
-  });
-
-  sock.ev.process(async (events) => {
-    if (!events['messages.upsert']) return;
-    const { messages, type } = events['messages.upsert'];
-    if (type !== 'notify') return;
-
-    for (const msg of messages) {
-      if (msg.key.fromMe) continue;
-      if (!msg.message) continue;
-
-      let remitente = msg.key.remoteJid;
-      if (!remitente || remitente.endsWith('@g.us')) continue; // ignorar grupos
-
-      // Contactos @lid: resolver al número de teléfono real y operar con ese
-      // JID. Responder directo al @lid es lo que rompía la sesión.
-      if (remitente.endsWith('@lid')) {
-        try {
-          const pn = await sock.signalRepository?.lidMapping?.getPNForLID(remitente);
-          if (pn) {
-            console.log(`[lid] Resuelto ${remitente} → ${pn}`);
-            remitente = pn;
-          } else {
-            console.log(`[lid] No se pudo resolver ${remitente}, se procesa igual con el lid`);
-          }
-        } catch (e) {
-          console.error('[lid] Error resolviendo LID:', e.message);
-        }
-      }
-
-      if (blacklist.has(remitente)) {
-        console.log(`[msg] Ignorado (en lista negra, causó un logout antes): ${remitente}`);
-        continue;
-      }
-
-      const texto =
-        msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        '';
-
-      if (!texto) continue;
-
-      console.log(`[msg] ${remitente}: ${texto}`);
-      procesandoJid = remitente;
-
-      // Override de guardia
-      if (texto.startsWith('!guardia')) {
-        const procesado = handleOverrideCommand(texto, remitente);
-        if (procesado === true) {
-          await sock.sendMessage(remitente, { text: '✅ Override de guardia activado.' });
-        } else if (procesado === 'formato_incorrecto') {
-          await sock.sendMessage(remitente, {
-            text: '⚠️ Formato incorrecto. Usá:\n!guardia Nombre Apellido 593XXXXXXXXX HH:MM\n\nEjemplo:\n!guardia Carlos López 593987654321 17:30',
-          });
-        }
-        procesandoJid = null;
-        continue;
-      }
-
-      const numeroLimpio = remitente.replace('@s.whatsapp.net', '');
-      const estado = memory.get(numeroLimpio);
-
-      // Si es el primer mensaje de este número, registrar lead atendido
-      if (estado.historial.length === 0) {
-        stats.logEvent('lead_atendido', numeroLimpio);
-      }
-
-      // Agregar mensaje al historial
-      memory.addMessage(numeroLimpio, 'user', texto);
-
-      let historial = estado.historial.filter(m => m.role === 'user' || m.role === 'assistant');
-
-      // Llamar a Claude
-      let respuesta;
-      try {
-        respuesta = await chat(historial);
-      } catch (e) {
-        console.error('[claude] Error:', e.message);
-        await sock.sendMessage(remitente, {
-          text: 'Hubo un inconveniente técnico. Por favor intente nuevamente en unos minutos.',
-        });
-        continue;
-      }
-
-      // Detectar triggers (CONSENT_GRANTED se procesa aparte — puede venir junto a otro trigger)
-      const trigger = extractTrigger(respuesta);
-      const consentEnEstaRespuesta = respuesta.includes('[CONSENT_GRANTED]');
-      const textoLimpio = cleanResponse(respuesta);
-
-      // Guardar respuesta en historial
-      memory.addMessage(numeroLimpio, 'assistant', respuesta);
-
-      // Marcar consentimiento si aplica
-      if (consentEnEstaRespuesta) {
-        memory.set(numeroLimpio, { consentimiento: true });
-        console.log(`[consent] Consentimiento registrado para ${numeroLimpio}`);
-      }
-
-      // Enviar respuesta al usuario
-      if (textoLimpio) {
-        try {
-          await sock.sendMessage(remitente, { text: textoLimpio });
-        } catch (e) {
-          console.error(`[ws] Error enviando mensaje a ${remitente}:`, e.message);
-        }
-      }
-
-      // Procesar trigger principal (excluye CONSENT_GRANTED que ya fue manejado arriba)
-      if (trigger && trigger !== 'CONSENT_GRANTED') {
-        const estadoActual = memory.get(numeroLimpio);
-
-        // Detectar flujo desde el trigger para extraer datos correctamente
-        const flujoDelTrigger =
-          trigger.includes('PROPIETARIO') || trigger.includes('IMBABURA') ? 'propietario' :
-          trigger.includes('ASESOR') ? 'asesor' :
-          trigger.includes('COMPRADOR') ? 'comprador' :
-          trigger.includes('ARRENDATARIO') ? 'arrendatario' : null;
-
-        let datosExtraidos = estadoActual.datos || {};
-        if (flujoDelTrigger) {
-          stats.logEvent(`flujo_${flujoDelTrigger}`, numeroLimpio);
-          const historialActual = estadoActual.historial.filter(m => m.role === 'user' || m.role === 'assistant');
-          const extraidos = await extraerDatos(historialActual, flujoDelTrigger);
-          datosExtraidos = { ...datosExtraidos, ...extraidos };
-          memory.set(numeroLimpio, { datos: datosExtraidos });
-        }
-
-        await handleTrigger(sock, trigger, remitente, datosExtraidos);
-      }
-
-      procesandoJid = null;
-    }
-  });
-
-  return sock;
-}
-
-startQRServer();
-connectToWhatsApp().catch(console.error);
+scheduler.init();
+startServer();

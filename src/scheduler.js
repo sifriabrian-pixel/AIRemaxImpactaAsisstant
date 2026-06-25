@@ -1,12 +1,9 @@
 const cron = require('node-cron');
 const memory = require('./memory');
+const whatsapp = require('./whatsapp');
 const { getAsesorDeGuardia } = require('./guardias');
 
-let sock = null;
-
-function init(socket) {
-  sock = socket;
-
+function init() {
   // Cada minuto: revisar follow-ups de propietarios fuera de horario
   cron.schedule('* * * * *', async () => {
     const asesor = await getAsesorDeGuardia();
@@ -73,7 +70,6 @@ function init(socket) {
 }
 
 async function enviarFollowup(numero, estado, tipo) {
-  if (!sock) return;
   const nombre = estado.datos?.nombre || '';
   const sector = estado.datos?.sector || '';
   let texto = '';
@@ -104,7 +100,7 @@ async function enviarFollowup(numero, estado, tipo) {
 
   if (texto) {
     try {
-      await sock.sendMessage(numero + '@s.whatsapp.net', { text: texto });
+      await whatsapp.sendMessage(numero, texto);
     } catch (e) {
       console.error(`[scheduler] Error enviando followup ${tipo} a ${numero}:`, e.message);
     }
@@ -112,9 +108,8 @@ async function enviarFollowup(numero, estado, tipo) {
 }
 
 async function enviarResumenPropietario(asesor, numeroLead, datos) {
-  if (!sock) return;
   const resumen = formatResumenPropietario(numeroLead, datos);
-  await sock.sendMessage(asesor.whatsapp + '@s.whatsapp.net', { text: resumen });
+  await whatsapp.sendMessage(asesor.whatsapp, resumen);
 }
 
 function formatResumenPropietario(telefono, datos) {
