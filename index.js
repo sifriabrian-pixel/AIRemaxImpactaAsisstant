@@ -346,6 +346,47 @@ function readBody(req) {
   });
 }
 
+function renderPrivacyPage() {
+  return `
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Política de Privacidad — RE/MAX Impacta</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+      </head>
+      <body style="font-family:sans-serif;max-width:720px;margin:40px auto;padding:0 20px;line-height:1.6;color:#222;">
+        <h1 style="color:#0b3d2e;">Política de Privacidad</h1>
+        <p><strong>RE/MAX Impacta — Grupo Impacta</strong></p>
+        <p>Última actualización: ${new Date().toLocaleDateString('es-EC')}</p>
+
+        <h2>1. Responsable del tratamiento</h2>
+        <p>Grupo Impacta (RE/MAX Impacta), con domicilio en Centro Comercial la Y, Local 025, 170510 Quito, Ecuador, es responsable del tratamiento de los datos personales que usted nos proporciona a través de nuestro asistente virtual de WhatsApp ("Valentina") y demás canales de contacto.</p>
+
+        <h2>2. Datos que recolectamos</h2>
+        <p>Según el motivo de su contacto, podemos solicitar: nombre completo, número de teléfono, ciudad o sector, tipo y características de la propiedad de interés (venta, arriendo, compra o renta), presupuesto, disponibilidad de contacto, fecha de cumpleaños (opcional) y, en caso de postulación como asesor, información sobre su experiencia y situación laboral.</p>
+
+        <h2>3. Finalidad</h2>
+        <p>Utilizamos estos datos exclusivamente para: contactarlo con un asesor inmobiliario, dar seguimiento a su consulta, evaluar postulaciones para unirse a nuestro equipo de asesores, y mejorar nuestro servicio de atención.</p>
+
+        <h2>4. Base legal</h2>
+        <p>El tratamiento de sus datos se realiza conforme a la Ley Orgánica de Protección de Datos Personales del Ecuador, en particular en virtud del Art. 7 numeral 5 (ejecución de medidas precontractuales a petición del titular). El aviso correspondiente se le presenta antes de solicitar cualquier dato personal, y el hecho de continuar la conversación constituye su consentimiento implícito.</p>
+
+        <h2>5. Conservación de datos</h2>
+        <p>Conservamos sus datos durante el tiempo necesario para gestionar su consulta y dar cumplimiento a obligaciones legales o contractuales aplicables.</p>
+
+        <h2>6. Sus derechos</h2>
+        <p>Usted tiene derecho a acceder, rectificar, actualizar o solicitar la eliminación de sus datos personales. Para ejercer estos derechos, puede contactarnos a través de los canales oficiales de RE/MAX Impacta.</p>
+
+        <h2>7. Compartición de datos</h2>
+        <p>Sus datos son compartidos únicamente con el asesor inmobiliario o responsable de selección correspondiente dentro de RE/MAX Impacta, con el fin de darle seguimiento a su consulta. No vendemos ni cedemos sus datos a terceros ajenos a la operación de la empresa.</p>
+
+        <h2>8. Contacto</h2>
+        <p>Para consultas sobre esta política o sobre el tratamiento de sus datos, puede escribirnos a través de nuestros canales oficiales en <a href="https://grupoimpactaec.com/">grupoimpactaec.com</a>.</p>
+      </body>
+    </html>
+  `;
+}
+
 function startServer() {
   const server = http.createServer(async (req, res) => {
     const parsedUrl = new URL(req.url, 'http://localhost');
@@ -414,6 +455,12 @@ function startServer() {
           }
         }
       }
+      return;
+    }
+
+    if (parsedUrl.pathname === '/privacidad') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(renderPrivacyPage());
       return;
     }
 
