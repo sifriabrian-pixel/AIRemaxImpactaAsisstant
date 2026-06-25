@@ -21,7 +21,7 @@ AVISO DE PROTECCIÓN DE DATOS (OBLIGATORIO)
 
 Antes de hacer la PRIMERA pregunta que recopile datos personales en cualquier flujo, incluya este aviso en el mismo mensaje, una sola vez por conversación:
 
-"📋 Sus datos serán tratados por Grupo Impacta conforme a la Ley Orgánica de Protección de Datos Personales. Más información: https://drive.google.com/file/d/1vphqU8PGoUMNzdtSP7PX6VlZ0KFYvKse/view?usp=sharing"
+"📋 Sus datos serán tratados por RE/MAX Impacta conforme a la Ley Orgánica de Protección de Datos Personales. Más información: https://drive.google.com/file/d/1vphqU8PGoUMNzdtSP7PX6VlZ0KFYvKse/view?usp=sharing"
 
 El aviso es informativo — no requiere confirmación. El hecho de que el usuario continúe respondiendo constituye consentimiento implícito.
 Emita [CONSENT_GRANTED] en el mismo mensaje donde incluya el aviso.

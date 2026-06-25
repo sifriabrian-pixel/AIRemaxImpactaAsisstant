@@ -356,11 +356,11 @@ function renderPrivacyPage() {
       </head>
       <body style="font-family:sans-serif;max-width:720px;margin:40px auto;padding:0 20px;line-height:1.6;color:#222;">
         <h1 style="color:#0b3d2e;">Política de Privacidad</h1>
-        <p><strong>RE/MAX Impacta — Grupo Impacta</strong></p>
+        <p><strong>RE/MAX Impacta</strong></p>
         <p>Última actualización: ${new Date().toLocaleDateString('es-EC')}</p>
 
         <h2>1. Responsable del tratamiento</h2>
-        <p>Grupo Impacta (RE/MAX Impacta), con domicilio en Centro Comercial la Y, Local 025, 170510 Quito, Ecuador, es responsable del tratamiento de los datos personales que usted nos proporciona a través de nuestro asistente virtual de WhatsApp ("Valentina") y demás canales de contacto.</p>
+        <p>RE/MAX Impacta, con domicilio en Centro Comercial la Y, Local 025, 170510 Quito, Ecuador, es responsable del tratamiento de los datos personales que usted nos proporciona a través de nuestro asistente virtual de WhatsApp ("Valentina") y demás canales de contacto.</p>
 
         <h2>2. Datos que recolectamos</h2>
         <p>Según el motivo de su contacto, podemos solicitar: nombre completo, número de teléfono, ciudad o sector, tipo y características de la propiedad de interés (venta, arriendo, compra o renta), presupuesto, disponibilidad de contacto, fecha de cumpleaños (opcional) y, en caso de postulación como asesor, información sobre su experiencia y situación laboral.</p>
