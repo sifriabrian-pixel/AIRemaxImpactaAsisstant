@@ -34,6 +34,47 @@ async function sendMessage(to, text) {
   return res.json();
 }
 
+// Envía un mensaje de plantilla aprobada (obligatorio para mensajes que la
+// empresa inicia fuera de la ventana de servicio de 24hs, ej. follow-ups).
+// parametros es un array de strings que rellenan las variables {{1}}, {{2}}... en orden.
+async function sendTemplate(to, nombrePlantilla, idioma, parametros = []) {
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId()}/messages`;
+  const body = {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'template',
+    template: {
+      name: nombrePlantilla,
+      language: { code: idioma },
+    },
+  };
+
+  if (parametros.length > 0) {
+    body.template.components = [
+      {
+        type: 'body',
+        parameters: parametros.map((texto) => ({ type: 'text', text: texto })),
+      },
+    ];
+  }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(`WhatsApp API ${res.status}: ${errBody}`);
+  }
+
+  return res.json();
+}
+
 // Verifica que el webhook realmente venga de Meta (firma HMAC con el App Secret).
 // Si no hay WHATSAPP_APP_SECRET configurado, no verifica (no recomendado en producción).
 function verifySignature(rawBody, signatureHeader) {
@@ -48,4 +89,4 @@ function verifySignature(rawBody, signatureHeader) {
   return crypto.timingSafeEqual(a, b);
 }
 
-module.exports = { sendMessage, verifySignature };
+module.exports = { sendMessage, sendTemplate, verifySignature };

@@ -74,10 +74,23 @@ async function enviarFollowup(numero, estado, tipo) {
   const sector = estado.datos?.sector || '';
   let texto = '';
 
+  // NOTA: fuera de la ventana de servicio de 24hs, WhatsApp solo permite
+  // mensajes de plantilla aprobada — el texto libre falla. Por ahora solo
+  // '24h_propietario' usa plantilla; el resto de casos quedan pendientes
+  // de crear su propia plantilla en Meta y conectarla aquí.
+  if (tipo === '24h_propietario') {
+    try {
+      await whatsapp.sendTemplate(numero, 'recordatorio_propietario_24h', 'es', [
+        nombre || 'cliente',
+        sector || 'su zona',
+      ]);
+    } catch (e) {
+      console.error(`[scheduler] Error enviando plantilla ${tipo} a ${numero}:`, e.message);
+    }
+    return;
+  }
+
   switch (tipo) {
-    case '24h_propietario':
-      texto = `Hola${nombre ? ' ' + nombre : ''}, quedamos en conversar sobre su propiedad${sector ? ' en ' + sector : ''}. ¿Pudo pensarlo? 🏠`;
-      break;
     case '48h_propietario':
       texto = `${nombre || 'Hola'}, solo quería asegurarme de que no quedó con dudas. Cuando quiera retomar, acá estamos 🏠`;
       break;
