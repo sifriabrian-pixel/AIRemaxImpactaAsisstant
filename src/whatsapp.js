@@ -36,8 +36,8 @@ async function sendMessage(to, text) {
 
 // Envía un mensaje de plantilla aprobada (obligatorio para mensajes que la
 // empresa inicia fuera de la ventana de servicio de 24hs, ej. follow-ups).
-// parametros es un array de strings que rellenan las variables {{1}}, {{2}}... en orden.
-async function sendTemplate(to, nombrePlantilla, idioma, parametros = []) {
+// parametros es un objeto { nombreVariable: valor }, ej. { nombre: 'Juan', sector: 'Cumbayá' }
+async function sendTemplate(to, nombrePlantilla, idioma, parametros = {}) {
   const url = `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId()}/messages`;
   const body = {
     messaging_product: 'whatsapp',
@@ -49,11 +49,16 @@ async function sendTemplate(to, nombrePlantilla, idioma, parametros = []) {
     },
   };
 
-  if (parametros.length > 0) {
+  const nombresVariables = Object.keys(parametros);
+  if (nombresVariables.length > 0) {
     body.template.components = [
       {
         type: 'body',
-        parameters: parametros.map((texto) => ({ type: 'text', text: texto })),
+        parameters: nombresVariables.map((nombreVar) => ({
+          type: 'text',
+          parameter_name: nombreVar,
+          text: parametros[nombreVar],
+        })),
       },
     ];
   }

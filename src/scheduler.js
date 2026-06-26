@@ -80,10 +80,10 @@ async function enviarFollowup(numero, estado, tipo) {
   // de crear su propia plantilla en Meta y conectarla aquí.
   if (tipo === '24h_propietario') {
     try {
-      await whatsapp.sendTemplate(numero, 'recordatorio_propietario_24h', 'es', [
-        nombre || 'cliente',
-        sector || 'su zona',
-      ]);
+      await whatsapp.sendTemplate(numero, 'recordatorio_propietario_24h', 'es', {
+        nombre: nombre || 'cliente',
+        sector: sector || 'su zona',
+      });
     } catch (e) {
       console.error(`[scheduler] Error enviando plantilla ${tipo} a ${numero}:`, e.message);
     }
