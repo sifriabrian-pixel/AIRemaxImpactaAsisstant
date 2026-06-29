@@ -403,6 +403,54 @@ function checkAuth(req, res) {
   return false;
 }
 
+function tiempoRelativo(fechaIso) {
+  if (!fechaIso) return '-';
+  const diffMs = Date.now() - new Date(fechaIso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `hace ${min} min`;
+  const horas = Math.floor(min / 60);
+  if (horas < 24) return `hace ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  if (dias === 1) return 'ayer';
+  return `hace ${dias}d`;
+}
+
+function motivoConsulta(estado) {
+  const op = estado.datos?.operacion;
+  switch (estado.flujo) {
+    case 'propietario':
+      if (op === 'arriendo') return 'Arriendo de propiedad';
+      if (op === 'venta') return 'Venta de propiedad';
+      return 'Venta o arriendo de propiedad';
+    case 'asesor':
+      return 'Postulación a asesor';
+    case 'comprador':
+      return 'Compra de propiedad';
+    case 'arrendatario':
+      return 'Alquiler de propiedad';
+    default:
+      return 'Sin clasificar';
+  }
+}
+
+function estadoLead(estado) {
+  const horasInactivo = estado.ultimoMensaje
+    ? (Date.now() - new Date(estado.ultimoMensaje).getTime()) / 1000 / 60 / 60
+    : 0;
+
+  if (estado.datos?.handoffListo) {
+    return { label: 'Calificado', bg: '#dcfce7', color: '#15803d' };
+  }
+  if (horasInactivo > 24) {
+    return { label: 'Sin respuesta', bg: '#f1f1f1', color: '#666' };
+  }
+  if (!estado.flujo || (estado.historial || []).length <= 2) {
+    return { label: 'Nuevo', bg: '#dbeafe', color: '#1d4ed8' };
+  }
+  return { label: 'Pendiente', bg: '#fef3c7', color: '#b45309' };
+}
+
 function renderConversacionesPage(numeroSeleccionado) {
   const todas = memory.getAll();
   const lista = Object.entries(todas)
@@ -411,14 +459,26 @@ function renderConversacionesPage(numeroSeleccionado) {
 
   const filasLista = lista.map(([numero, estado]) => {
     const nombre = estado.datos?.nombre || numero;
-    const flujo = estado.flujo || '-';
-    const fecha = estado.ultimoMensaje ? new Date(estado.ultimoMensaje).toLocaleString('es-EC') : '-';
+    const motivo = motivoConsulta(estado);
+    const est = estadoLead(estado);
+    const fecha = tiempoRelativo(estado.ultimoMensaje);
     const activo = numero === numeroSeleccionado ? 'background:#e8f0ec;' : '';
     return `
-      <a href="/conversaciones?numero=${encodeURIComponent(numero)}" style="text-decoration:none;color:inherit;">
-        <div style="padding:12px;border-bottom:1px solid #eee;${activo}">
-          <div style="font-weight:700;">${nombre}</div>
-          <div style="font-size:13px;color:#666;">${numero} · ${flujo} · ${fecha}</div>
+      <a href="/conversaciones?numero=${encodeURIComponent(numero)}"
+         class="fila-conv"
+         data-nombre="${nombre.toLowerCase()}"
+         data-numero="${numero}"
+         data-estado="${est.label}"
+         style="text-decoration:none;color:inherit;display:block;">
+        <div style="padding:12px 16px;border-bottom:1px solid #eee;${activo}">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;">
+            <div style="font-weight:700;">${nombre}</div>
+            <div style="font-size:12px;color:#999;">${fecha}</div>
+          </div>
+          <div style="font-size:13px;color:#666;margin-top:2px;">${motivo}</div>
+          <div style="margin-top:6px;">
+            <span style="background:${est.bg};color:${est.color};font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;">${est.label}</span>
+          </div>
         </div>
       </a>`;
   }).join('');
@@ -448,18 +508,66 @@ function renderConversacionesPage(numeroSeleccionado) {
     <html>
       <head>
         <meta charset="utf-8">
-        <meta http-equiv="refresh" content="60">
       </head>
       <body style="background:#0b3d2e;min-height:100vh;margin:0;padding:24px;font-family:sans-serif;">
-        <div style="background:white;border-radius:16px;max-width:900px;margin:0 auto;display:flex;min-height:600px;overflow:hidden;">
-          <div style="width:300px;border-right:1px solid #eee;overflow-y:auto;">
-            <h3 style="padding:16px;margin:0;color:#0b3d2e;border-bottom:1px solid #eee;">Conversaciones</h3>
-            ${filasLista || '<p style="padding:16px;color:#999;">Sin conversaciones todavía.</p>'}
+        <div style="background:white;border-radius:16px;max-width:1000px;margin:0 auto;display:flex;min-height:600px;overflow:hidden;">
+          <div style="width:320px;border-right:1px solid #eee;display:flex;flex-direction:column;">
+            <div style="padding:16px;border-bottom:1px solid #eee;">
+              <h3 style="margin:0 0 12px;color:#0b3d2e;">Conversaciones</h3>
+              <div style="position:relative;">
+                <input id="buscador" type="text" placeholder="Buscar nombre o número..."
+                  style="width:100%;box-sizing:border-box;padding:8px 12px 8px 32px;border-radius:8px;border:1px solid #ddd;font-size:14px;">
+                <span style="position:absolute;left:10px;top:8px;color:#999;">🔍</span>
+              </div>
+              <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+                <button class="filtro-estado" data-filtro="Todos" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:#0b3d2e;color:white;font-size:12px;cursor:pointer;">Todos</button>
+                <button class="filtro-estado" data-filtro="Nuevo" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:white;color:#333;font-size:12px;cursor:pointer;">Nuevos</button>
+                <button class="filtro-estado" data-filtro="Calificado" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:white;color:#333;font-size:12px;cursor:pointer;">Calificados</button>
+                <button class="filtro-estado" data-filtro="Pendiente" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:white;color:#333;font-size:12px;cursor:pointer;">Pendientes</button>
+              </div>
+            </div>
+            <div id="lista-conversaciones" style="overflow-y:auto;flex:1;">
+              ${filasLista || '<p style="padding:16px;color:#999;">Sin conversaciones todavía.</p>'}
+              <p id="sin-resultados" style="display:none;padding:16px;color:#999;">Sin resultados.</p>
+            </div>
           </div>
           <div style="flex:1;overflow-y:auto;">
             ${panelDerecho}
           </div>
         </div>
+
+        <script>
+          const buscador = document.getElementById('buscador');
+          const filas = Array.from(document.querySelectorAll('.fila-conv'));
+          const botonesFiltro = Array.from(document.querySelectorAll('.filtro-estado'));
+          const sinResultados = document.getElementById('sin-resultados');
+          let filtroActivo = 'Todos';
+
+          function aplicarFiltros() {
+            const texto = buscador.value.trim().toLowerCase();
+            let visibles = 0;
+            filas.forEach((fila) => {
+              const coincideTexto = !texto || fila.dataset.nombre.includes(texto) || fila.dataset.numero.includes(texto);
+              const coincideEstado = filtroActivo === 'Todos' || fila.dataset.estado === filtroActivo;
+              const visible = coincideTexto && coincideEstado;
+              fila.style.display = visible ? 'block' : 'none';
+              if (visible) visibles++;
+            });
+            sinResultados.style.display = visibles === 0 ? 'block' : 'none';
+          }
+
+          buscador.addEventListener('input', aplicarFiltros);
+          botonesFiltro.forEach((boton) => {
+            boton.addEventListener('click', () => {
+              filtroActivo = boton.dataset.filtro;
+              botonesFiltro.forEach((b) => {
+                b.style.background = b === boton ? '#0b3d2e' : 'white';
+                b.style.color = b === boton ? 'white' : '#333';
+              });
+              aplicarFiltros();
+            });
+          });
+        </script>
       </body>
     </html>
   `;
