@@ -22,6 +22,10 @@ const TRIGGERS = [
   'HANDOFF_ARRENDATARIO',
   'HANDOFF_GENERAL',
   'CONSENT_GRANTED',
+  'FLUJO_PROPIETARIO',
+  'FLUJO_ASESOR',
+  'FLUJO_COMPRADOR',
+  'FLUJO_ARRENDATARIO',
 ];
 
 function extractTrigger(text) {
@@ -234,7 +238,7 @@ async function procesarMensaje(numeroLimpio, texto) {
     return;
   }
 
-  // Detectar triggers (CONSENT_GRANTED se procesa aparte — puede venir junto a otro trigger)
+  // Detectar triggers (CONSENT_GRANTED y FLUJO_* se procesan aparte — pueden venir junto a otro trigger)
   const trigger = extractTrigger(respuesta);
   const consentEnEstaRespuesta = respuesta.includes('[CONSENT_GRANTED]');
   const textoLimpio = cleanResponse(respuesta);
@@ -246,6 +250,21 @@ async function procesarMensaje(numeroLimpio, texto) {
   if (consentEnEstaRespuesta) {
     memory.set(numeroLimpio, { consentimiento: true });
     console.log(`[consent] Consentimiento registrado para ${numeroLimpio}`);
+  }
+
+  // Detectar el flujo apenas se identifica (para que el dashboard lo muestre desde el primer mensaje)
+  const FLUJO_TAGS = {
+    FLUJO_PROPIETARIO: 'propietario',
+    FLUJO_ASESOR: 'asesor',
+    FLUJO_COMPRADOR: 'comprador',
+    FLUJO_ARRENDATARIO: 'arrendatario',
+  };
+  for (const [tag, flujo] of Object.entries(FLUJO_TAGS)) {
+    if (respuesta.includes(`[${tag}]`)) {
+      memory.set(numeroLimpio, { flujo });
+      console.log(`[flujo] Detectado "${flujo}" para ${numeroLimpio}`);
+      break;
+    }
   }
 
   // Enviar respuesta al usuario
