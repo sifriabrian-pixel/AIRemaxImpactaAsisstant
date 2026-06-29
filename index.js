@@ -387,9 +387,95 @@ function renderPrivacyPage() {
   `;
 }
 
+function checkAuth(req, res) {
+  const password = process.env.DASHBOARD_PASSWORD;
+  if (!password) return true; // sin contraseña configurada, no se protege (no recomendado)
+
+  const header = req.headers.authorization || '';
+  const [, encoded] = header.split(' ');
+  const decoded = encoded ? Buffer.from(encoded, 'base64').toString('utf8') : '';
+  const [, pass] = decoded.split(':');
+
+  if (pass === password) return true;
+
+  res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="RE/MAX Impacta"' });
+  res.end('Acceso restringido');
+  return false;
+}
+
+function renderConversacionesPage(numeroSeleccionado) {
+  const todas = memory.getAll();
+  const lista = Object.entries(todas)
+    .filter(([, estado]) => estado.historial && estado.historial.length > 0)
+    .sort(([, a], [, b]) => new Date(b.ultimoMensaje || 0) - new Date(a.ultimoMensaje || 0));
+
+  const filasLista = lista.map(([numero, estado]) => {
+    const nombre = estado.datos?.nombre || numero;
+    const flujo = estado.flujo || '-';
+    const fecha = estado.ultimoMensaje ? new Date(estado.ultimoMensaje).toLocaleString('es-EC') : '-';
+    const activo = numero === numeroSeleccionado ? 'background:#e8f0ec;' : '';
+    return `
+      <a href="/conversaciones?numero=${encodeURIComponent(numero)}" style="text-decoration:none;color:inherit;">
+        <div style="padding:12px;border-bottom:1px solid #eee;${activo}">
+          <div style="font-weight:700;">${nombre}</div>
+          <div style="font-size:13px;color:#666;">${numero} · ${flujo} · ${fecha}</div>
+        </div>
+      </a>`;
+  }).join('');
+
+  let panelDerecho = '<p style="color:#999;padding:20px;">Seleccioná una conversación de la lista.</p>';
+  if (numeroSeleccionado && todas[numeroSeleccionado]) {
+    const estado = todas[numeroSeleccionado];
+    const burbujas = (estado.historial || []).map((m) => {
+      const esUsuario = m.role === 'user';
+      return `
+        <div style="display:flex;justify-content:${esUsuario ? 'flex-start' : 'flex-end'};margin:8px 0;">
+          <div style="max-width:70%;padding:10px 14px;border-radius:14px;background:${esUsuario ? '#f0f0f0' : '#0b3d2e'};color:${esUsuario ? '#222' : 'white'};">
+            ${m.content.replace(/\n/g, '<br>')}
+          </div>
+        </div>`;
+    }).join('');
+
+    panelDerecho = `
+      <div style="padding:16px;">
+        <h3 style="margin:0 0 4px;color:#0b3d2e;">${estado.datos?.nombre || numeroSeleccionado}</h3>
+        <p style="color:#666;font-size:13px;margin:0 0 16px;">${numeroSeleccionado} · Flujo: ${estado.flujo || '-'}</p>
+        <div>${burbujas}</div>
+      </div>`;
+  }
+
+  return `
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta http-equiv="refresh" content="60">
+      </head>
+      <body style="background:#0b3d2e;min-height:100vh;margin:0;padding:24px;font-family:sans-serif;">
+        <div style="background:white;border-radius:16px;max-width:900px;margin:0 auto;display:flex;min-height:600px;overflow:hidden;">
+          <div style="width:300px;border-right:1px solid #eee;overflow-y:auto;">
+            <h3 style="padding:16px;margin:0;color:#0b3d2e;border-bottom:1px solid #eee;">Conversaciones</h3>
+            ${filasLista || '<p style="padding:16px;color:#999;">Sin conversaciones todavía.</p>'}
+          </div>
+          <div style="flex:1;overflow-y:auto;">
+            ${panelDerecho}
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
 function startServer() {
   const server = http.createServer(async (req, res) => {
     const parsedUrl = new URL(req.url, 'http://localhost');
+
+    if (parsedUrl.pathname === '/conversaciones') {
+      if (!checkAuth(req, res)) return;
+      const numeroSeleccionado = parsedUrl.searchParams.get('numero');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(renderConversacionesPage(numeroSeleccionado));
+      return;
+    }
 
     if (parsedUrl.pathname === '/stats') {
       const fechaFiltro = parsedUrl.searchParams.get('fecha') || null;
