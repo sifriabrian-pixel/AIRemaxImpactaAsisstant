@@ -152,9 +152,14 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
       }
 
       case 'HANDOFF_COMPRADOR': {
-        if (process.env.WHATSAPP_BACKUP) {
+        const asesorC = await guardias.getAsesorDeGuardia();
+        if (asesorC) {
           const resumen = formatResumenComprador(numeroLimpio, datos);
-          await whatsapp.sendMessage(process.env.WHATSAPP_BACKUP, resumen);
+          await whatsapp.sendMessage(asesorC.whatsapp, resumen);
+          console.log(`[handoff] Comprador derivado a ${asesorC.nombre}`);
+        } else {
+          memory.set(numeroLimpio, { followupPendiente: true });
+          console.log('[handoff] Comprador fuera de horario — encolado');
         }
         memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
         stats.logEvent('handoff_comprador', numeroLimpio);
@@ -162,9 +167,14 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
       }
 
       case 'HANDOFF_ARRENDATARIO': {
-        if (process.env.WHATSAPP_BACKUP) {
+        const asesorA = await guardias.getAsesorDeGuardia();
+        if (asesorA) {
           const resumen = formatResumenArrendatario(numeroLimpio, datos);
-          await whatsapp.sendMessage(process.env.WHATSAPP_BACKUP, resumen);
+          await whatsapp.sendMessage(asesorA.whatsapp, resumen);
+          console.log(`[handoff] Arrendatario derivado a ${asesorA.nombre}`);
+        } else {
+          memory.set(numeroLimpio, { followupPendiente: true });
+          console.log('[handoff] Arrendatario fuera de horario — encolado');
         }
         memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
         stats.logEvent('handoff_arrendatario', numeroLimpio);
@@ -172,9 +182,11 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
       }
 
       case 'HANDOFF_GENERAL': {
-        if (process.env.WHATSAPP_BACKUP) {
+        const asesorG = await guardias.getAsesorDeGuardia();
+        if (asesorG) {
           const texto = `🔔 Consulta general\n\nContacto: ${numeroLimpio}\nMensaje sin flujo definido. Requiere atención manual.`;
-          await whatsapp.sendMessage(process.env.WHATSAPP_BACKUP, texto);
+          await whatsapp.sendMessage(asesorG.whatsapp, texto);
+          console.log(`[handoff] General derivado a ${asesorG.nombre}`);
         }
         stats.logEvent('handoff_general', numeroLimpio);
         break;
