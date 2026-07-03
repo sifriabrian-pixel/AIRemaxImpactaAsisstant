@@ -74,16 +74,21 @@ async function enviarFollowup(numero, estado, tipo) {
   const sector = estado.datos?.sector || '';
   let texto = '';
 
-  // NOTA: fuera de la ventana de servicio de 24hs, WhatsApp solo permite
-  // mensajes de plantilla aprobada — el texto libre falla. Por ahora solo
-  // '24h_propietario' usa plantilla; el resto de casos quedan pendientes
-  // de crear su propia plantilla en Meta y conectarla aquí.
-  if (tipo === '24h_propietario') {
+  // Todos los follow-ups usan plantillas aprobadas (obligatorio fuera de la ventana de 24hs)
+  const plantillas = {
+    '24h_propietario': () => whatsapp.sendTemplate(numero, 'recordatorio_propietario_24h', 'es', {
+      nombre: nombre || 'cliente',
+      sector: sector || 'su zona',
+    }),
+    '24h_asesor':  () => whatsapp.sendTemplate(numero, 'seguimiento_asesor_24h', 'es', { customer_name: nombre || 'cliente' }),
+    '72h_asesor':  () => whatsapp.sendTemplate(numero, 'seguimiento_asesor_72h', 'es', { customer_name: nombre || 'cliente' }),
+    '7d_asesor':   () => whatsapp.sendTemplate(numero, 'seguimiento_asesor_7d',  'es', { customer_name: nombre || 'cliente' }),
+    '30d_asesor':  () => whatsapp.sendTemplate(numero, 'reactivacion_asesor_30d', 'es', { customer_name: nombre || 'cliente' }),
+  };
+
+  if (plantillas[tipo]) {
     try {
-      await whatsapp.sendTemplate(numero, 'recordatorio_propietario_24h', 'es', {
-        nombre: nombre || 'cliente',
-        sector: sector || 'su zona',
-      });
+      await plantillas[tipo]();
     } catch (e) {
       console.error(`[scheduler] Error enviando plantilla ${tipo} a ${numero}:`, e.message);
     }
@@ -93,18 +98,6 @@ async function enviarFollowup(numero, estado, tipo) {
   switch (tipo) {
     case '48h_propietario':
       texto = `${nombre || 'Hola'}, solo quería asegurarme de que no quedó con dudas. Cuando quiera retomar, acá estamos 🏠`;
-      break;
-    case '24h_asesor':
-      texto = `¡Hola${nombre ? ' ' + nombre : ''}! Le escribo porque quedamos en conversar sobre la oportunidad en RE/MAX Impacta. ¿Todavía le interesa saber más?`;
-      break;
-    case '72h_asesor':
-      texto = `${nombre || 'Hola'}, entiendo que está evaluando opciones. El proceso de selección tiene cupos limitados por período. ¿Pudo ver el video que le compartí?`;
-      break;
-    case '7d_asesor':
-      texto = `${nombre || 'Hola'}, voy a dejar su consulta en pausa por ahora. Si en algún momento quiere retomar la conversación sobre la carrera inmobiliaria, acá estamos. ¡Éxitos!`;
-      break;
-    case '30d_asesor':
-      texto = `¡Hola${nombre ? ' ' + nombre : ''}! Han pasado unas semanas. ¿Hubo algún cambio en su situación? Seguimos con cupos disponibles para nuevos asesores en RE/MAX Impacta 😊`;
       break;
     case '30d_cobertura':
       texto = `¡Hola${nombre ? ' ' + nombre : ''}! Le escribo desde RE/MAX Impacta. ¿Su propiedad sigue disponible? Si la situación cambió y necesita apoyo, con gusto le orientamos 🏠`;
