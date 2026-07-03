@@ -38,9 +38,10 @@ function extractTrigger(text) {
 function cleanResponse(text) {
   let cleaned = text;
   for (const t of TRIGGERS) {
-    cleaned = cleaned.replace(`[${t}]`, '').trim();
+    cleaned = cleaned.replace(new RegExp(`\\[${t}\\]`, 'g'), '');
   }
-  return cleaned;
+  // Colapsar líneas vacías múltiples que dejan los tags y limpiar bordes
+  return cleaned.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function formatResumenAsesor(telefono, datos) {
