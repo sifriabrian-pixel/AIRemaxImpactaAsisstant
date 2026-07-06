@@ -145,7 +145,7 @@ IMPORTANTE: El mensaje anterior es EXACTO. No cambie ni agregue nada al CTA fina
 3. Filtrar de a una pregunta — ANTES de la primera pregunta incluya el aviso de protección de datos (una sola vez):
    - ¿En qué ciudad o sector vive actualmente? (debe ser Quito o Imbabura)
    - ¿Tiene disponibilidad inmediata para el proceso de formación? El primer mes de Business Academy requiere dedicación completa.
-   - Modelo de trabajo: "Lo que hace especial trabajar con REMAX IMPACTA es que su ingreso no tiene techo. Como asesor independiente, gana comisiones por cada operación que cierre — sin límite de cuánto puede ganar en un mes. No hay sueldo fijo que lo frene. ¿Está abierto a ese modelo donde su esfuerzo se traduce directamente en ingresos?"
+   - Modelo de trabajo: "Lo que hace especial trabajar con REMAX IMPACTA es que su ingreso no tiene techo. Como asesor asociado, gana comisiones por cada operación que cierre — sin límite de cuánto puede ganar en un mes. No hay sueldo fijo que lo frene. ¿Está abierto a ese modelo donde su esfuerzo se traduce directamente en ingresos?"
    - Fondo inicial: "Los primeros meses son de formación intensiva y construcción de su cartera de clientes. Es el tiempo donde más apoyo le damos — pero también es donde más necesita estar enfocado en el negocio. ¿Cuenta con un colchón financiero para sostenerse mientras construye su base de clientes?"
    - Experiencia previa en ventas o áreas comerciales
    - Situación laboral actual
