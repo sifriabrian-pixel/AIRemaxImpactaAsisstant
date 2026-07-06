@@ -107,11 +107,17 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
       case 'HANDOFF_IMBABURA_NICOLE': {
         const resumen = scheduler.formatResumenPropietario(numeroLimpio, { ...datos, zona: 'Imbabura' });
         if (process.env.WHATSAPP_NICOLE) {
-          await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, resumen);
+          try {
+            await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, resumen);
+            console.log(`[handoff] Propietario Imbabura enviado a Nicole`);
+          } catch (e) {
+            console.error(`[handoff] FALLO envío a Nicole (Imbabura):`, e.message);
+          }
+        } else {
+          console.warn('[handoff] WHATSAPP_NICOLE no configurado — Imbabura sin notificar');
         }
         memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
         stats.logEvent('handoff_imbabura', numeroLimpio);
-        console.log(`[handoff] Propietario Imbabura derivado a Nicole`);
         break;
       }
 
@@ -136,11 +142,17 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
       case 'HANDOFF_ASESOR': {
         const resumen = formatResumenAsesor(numeroLimpio, datos);
         if (process.env.WHATSAPP_NICOLE) {
-          await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, resumen);
+          try {
+            await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, resumen);
+            console.log(`[handoff] Asesor enviado a Nicole`);
+          } catch (e) {
+            console.error(`[handoff] FALLO envío a Nicole (asesor):`, e.message);
+          }
+        } else {
+          console.warn('[handoff] WHATSAPP_NICOLE no configurado — asesor sin notificar');
         }
         memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
         stats.logEvent('handoff_asesor', numeroLimpio);
-        console.log(`[handoff] Asesor derivado a Nicole`);
         break;
       }
 
