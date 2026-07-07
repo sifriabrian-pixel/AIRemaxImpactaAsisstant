@@ -45,7 +45,7 @@ function cleanResponse(text) {
 }
 
 function formatResumenAsesor(telefono, datos) {
-  return `🔔 Nuevo prospecto asesor calificado
+  return `🔔 RECLUTAMIENTO — Nuevo prospecto asesor calificado
 
 Nombre: ${datos.nombre || '-'} · ${telefono}
 Edad: ${datos.edad || '-'}
@@ -90,6 +90,15 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         if (asesor) {
           const resumen = scheduler.formatResumenPropietario(numeroLimpio, datos);
           await whatsapp.sendMessage(asesor.whatsapp, resumen);
+          // Notificar a Nicole con el asesor asignado
+          if (process.env.WHATSAPP_NICOLE) {
+            try {
+              const resumenNicole = `📋 CAPTACIÓN — Lead derivado a ${asesor.nombre}\n\n` + resumen;
+              await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, resumenNicole);
+            } catch (e) {
+              console.error(`[handoff] FALLO notificación a Nicole (propietario):`, e.message);
+            }
+          }
           memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
           stats.logEvent('handoff_propietario', numeroLimpio);
           console.log(`[handoff] Propietario derivado a ${asesor.nombre}`);
@@ -105,10 +114,10 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
       }
 
       case 'HANDOFF_IMBABURA_NICOLE': {
-        const resumen = scheduler.formatResumenPropietario(numeroLimpio, { ...datos, zona: 'Imbabura' });
+        const resumenImbabura = scheduler.formatResumenPropietario(numeroLimpio, { ...datos, zona: 'Imbabura' });
         if (process.env.WHATSAPP_NICOLE) {
           try {
-            await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, resumen);
+            await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, `📋 CAPTACIÓN — Imbabura\n\n` + resumenImbabura);
             console.log(`[handoff] Propietario Imbabura enviado a Nicole`);
           } catch (e) {
             console.error(`[handoff] FALLO envío a Nicole (Imbabura):`, e.message);
