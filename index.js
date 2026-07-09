@@ -96,7 +96,7 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
           if (process.env.WHATSAPP_NICOLE) {
             try {
               const resumenNicole = `📋 CAPTACIÓN — Lead derivado a ${asesor.nombre}\n\n` + resumen;
-              await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, resumenNicole);
+              await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole', 'es_EC', { '1': resumenNicole });
               memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', resumenNicole);
             } catch (e) {
               console.error(`[handoff] FALLO notificación a Nicole (propietario):`, e.message);
@@ -121,7 +121,7 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         if (process.env.WHATSAPP_NICOLE) {
           try {
             const msgImbabura = `📋 CAPTACIÓN — Imbabura\n\n` + resumenImbabura;
-            await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, msgImbabura);
+            await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole', 'es_EC', { '1': msgImbabura });
             memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', msgImbabura);
             console.log(`[handoff] Propietario Imbabura enviado a Nicole`);
           } catch (e) {
@@ -157,7 +157,7 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         const resumen = formatResumenAsesor(numeroLimpio, datos);
         if (process.env.WHATSAPP_NICOLE) {
           try {
-            await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, resumen);
+            await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole', 'es_EC', { '1': resumen });
             memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', resumen);
             console.log(`[handoff] Asesor enviado a Nicole`);
           } catch (e) {

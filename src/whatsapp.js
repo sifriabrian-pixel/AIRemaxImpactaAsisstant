@@ -61,11 +61,12 @@ async function sendTemplate(to, nombrePlantilla, idioma, parametros = {}) {
     body.template.components = [
       {
         type: 'body',
-        parameters: nombresVariables.map((nombreVar) => ({
-          type: 'text',
-          parameter_name: nombreVar,
-          text: parametros[nombreVar],
-        })),
+        // Variables posicionales ({{1}}, {{2}}…) no usan parameter_name
+        parameters: nombresVariables.map((nombreVar) => {
+          const param = { type: 'text', text: parametros[nombreVar] };
+          if (!/^\d+$/.test(nombreVar)) param.parameter_name = nombreVar;
+          return param;
+        }),
       },
     ];
   }
