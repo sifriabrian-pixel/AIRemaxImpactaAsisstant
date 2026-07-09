@@ -272,7 +272,9 @@ async function procesarMensaje(numeroLimpio, texto) {
   // Agregar mensaje al historial
   memory.addMessage(numeroLimpio, 'user', texto);
 
-  const historial = estado.historial.filter(m => m.role === 'user' || m.role === 'assistant');
+  const historial = estado.historial
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .map(({ role, content }) => ({ role, content }));
 
   // Llamar a Claude
   let respuesta;
