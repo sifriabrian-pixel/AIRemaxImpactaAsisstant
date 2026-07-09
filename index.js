@@ -90,6 +90,8 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         if (asesor) {
           const resumen = scheduler.formatResumenPropietario(numeroLimpio, datos);
           await whatsapp.sendMessage(asesor.whatsapp, resumen);
+          memory.set(asesor.whatsapp, { esGuardia: true, nombreGuardia: asesor.nombre });
+          memory.addMessage(asesor.whatsapp, 'assistant', resumen);
           // Notificar a Nicole con el asesor asignado
           if (process.env.WHATSAPP_NICOLE) {
             try {
@@ -182,6 +184,8 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         if (asesorC) {
           const resumen = formatResumenComprador(numeroLimpio, datos);
           await whatsapp.sendMessage(asesorC.whatsapp, resumen);
+          memory.set(asesorC.whatsapp, { esGuardia: true, nombreGuardia: asesorC.nombre });
+          memory.addMessage(asesorC.whatsapp, 'assistant', resumen);
           console.log(`[handoff] Comprador derivado a ${asesorC.nombre}`);
         } else {
           memory.set(numeroLimpio, { followupPendiente: true });
@@ -197,6 +201,8 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         if (asesorA) {
           const resumen = formatResumenArrendatario(numeroLimpio, datos);
           await whatsapp.sendMessage(asesorA.whatsapp, resumen);
+          memory.set(asesorA.whatsapp, { esGuardia: true, nombreGuardia: asesorA.nombre });
+          memory.addMessage(asesorA.whatsapp, 'assistant', resumen);
           console.log(`[handoff] Arrendatario derivado a ${asesorA.nombre}`);
         } else {
           memory.set(numeroLimpio, { followupPendiente: true });
@@ -212,6 +218,8 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         if (asesorG) {
           const texto = `🔔 Consulta general\n\nContacto: ${numeroLimpio}\nMensaje sin flujo definido. Requiere atención manual.`;
           await whatsapp.sendMessage(asesorG.whatsapp, texto);
+          memory.set(asesorG.whatsapp, { esGuardia: true, nombreGuardia: asesorG.nombre });
+          memory.addMessage(asesorG.whatsapp, 'assistant', texto);
           console.log(`[handoff] General derivado a ${asesorG.nombre}`);
         }
         stats.logEvent('handoff_general', numeroLimpio);
@@ -516,7 +524,11 @@ function renderConversacionesPage(numeroSeleccionado) {
 
   const nicoleNumero = process.env.WHATSAPP_NICOLE || '';
   const filasLista = lista.map(([numero, estado]) => {
-    const nombre = numero === nicoleNumero ? '📋 Nicole Vinueza (derivaciones)' : (estado.datos?.nombre || numero);
+    const nombre = numero === nicoleNumero
+      ? '📋 Nicole Vinueza (derivaciones)'
+      : estado.esGuardia
+        ? `🔔 Asesor de guardia — ${estado.nombreGuardia || numero}`
+        : (estado.datos?.nombre || numero);
     const motivo = motivoConsulta(estado);
     const est = estadoLead(estado);
     const fecha = tiempoRelativo(estado.ultimoMensaje);
@@ -560,8 +572,16 @@ function renderConversacionesPage(numeroSeleccionado) {
 
     panelDerecho = `
       <div style="padding:16px;">
-        <h3 style="margin:0 0 4px;color:#0b3d2e;">${numeroSeleccionado === nicoleNumero ? 'Nicole Vinueza — Derivaciones' : (estado.datos?.nombre || numeroSeleccionado)}</h3>
-        <p style="color:#666;font-size:13px;margin:0 0 16px;">${numeroSeleccionado} · ${numeroSeleccionado === nicoleNumero ? 'Resúmenes enviados' : 'Flujo: ' + (estado.flujo || '-')}</p>
+        <h3 style="margin:0 0 4px;color:#0b3d2e;">${
+          numeroSeleccionado === nicoleNumero ? 'Nicole Vinueza — Derivaciones' :
+          estado.esGuardia ? `Asesor de guardia — ${estado.nombreGuardia || numeroSeleccionado}` :
+          (estado.datos?.nombre || numeroSeleccionado)
+        }</h3>
+        <p style="color:#666;font-size:13px;margin:0 0 16px;">${numeroSeleccionado} · ${
+          numeroSeleccionado === nicoleNumero ? 'Resúmenes enviados' :
+          estado.esGuardia ? 'Leads derivados' :
+          'Flujo: ' + (estado.flujo || '-')
+        }</p>
         <div>${burbujas}</div>
       </div>`;
   }
