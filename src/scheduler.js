@@ -76,7 +76,7 @@ async function enviarFollowup(numero, estado, tipo) {
 
   // Todos los follow-ups usan plantillas aprobadas (obligatorio fuera de la ventana de 24hs)
   const plantillas = {
-    '24h_propietario': () => whatsapp.sendTemplate(numero, 'recordatorio_propietario_24h', 'es', {
+    '24h_propietario': () => whatsapp.sendTemplate(numero, 'recordatorio_propietario_24h', 'es_EC', {
       nombre: nombre || 'cliente',
       sector: sector || 'su zona',
     }),
