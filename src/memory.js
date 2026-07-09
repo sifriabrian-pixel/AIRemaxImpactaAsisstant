@@ -50,7 +50,7 @@ const MAX_HISTORIAL = 40; // 20 turnos completos (user + assistant)
 
 function addMessage(numero, role, content) {
   const estado = get(numero);
-  estado.historial.push({ role, content });
+  estado.historial.push({ role, content, ts: new Date().toISOString() });
   // Mantener solo los últimos MAX_HISTORIAL mensajes
   if (estado.historial.length > MAX_HISTORIAL) {
     estado.historial = estado.historial.slice(-MAX_HISTORIAL);

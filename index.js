@@ -95,6 +95,7 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
             try {
               const resumenNicole = `📋 CAPTACIÓN — Lead derivado a ${asesor.nombre}\n\n` + resumen;
               await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, resumenNicole);
+              memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', resumenNicole);
             } catch (e) {
               console.error(`[handoff] FALLO notificación a Nicole (propietario):`, e.message);
             }
@@ -117,7 +118,9 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         const resumenImbabura = scheduler.formatResumenPropietario(numeroLimpio, { ...datos, zona: 'Imbabura' });
         if (process.env.WHATSAPP_NICOLE) {
           try {
-            await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, `📋 CAPTACIÓN — Imbabura\n\n` + resumenImbabura);
+            const msgImbabura = `📋 CAPTACIÓN — Imbabura\n\n` + resumenImbabura;
+            await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, msgImbabura);
+            memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', msgImbabura);
             console.log(`[handoff] Propietario Imbabura enviado a Nicole`);
           } catch (e) {
             console.error(`[handoff] FALLO envío a Nicole (Imbabura):`, e.message);
@@ -153,6 +156,7 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         if (process.env.WHATSAPP_NICOLE) {
           try {
             await whatsapp.sendMessage(process.env.WHATSAPP_NICOLE, resumen);
+            memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', resumen);
             console.log(`[handoff] Asesor enviado a Nicole`);
           } catch (e) {
             console.error(`[handoff] FALLO envío a Nicole (asesor):`, e.message);
@@ -510,8 +514,9 @@ function renderConversacionesPage(numeroSeleccionado) {
     .filter(([, estado]) => estado.historial && estado.historial.length > 0)
     .sort(([, a], [, b]) => new Date(b.ultimoMensaje || 0) - new Date(a.ultimoMensaje || 0));
 
+  const nicoleNumero = process.env.WHATSAPP_NICOLE || '';
   const filasLista = lista.map(([numero, estado]) => {
-    const nombre = estado.datos?.nombre || numero;
+    const nombre = numero === nicoleNumero ? '📋 Nicole Vinueza (derivaciones)' : (estado.datos?.nombre || numero);
     const motivo = motivoConsulta(estado);
     const est = estadoLead(estado);
     const fecha = tiempoRelativo(estado.ultimoMensaje);
@@ -541,18 +546,22 @@ function renderConversacionesPage(numeroSeleccionado) {
     const estado = todas[numeroSeleccionado];
     const burbujas = (estado.historial || []).map((m) => {
       const esUsuario = m.role === 'user';
+      const hora = m.ts
+        ? new Date(m.ts).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guayaquil' })
+        : '';
       return `
         <div style="display:flex;justify-content:${esUsuario ? 'flex-start' : 'flex-end'};margin:8px 0;">
           <div style="max-width:70%;padding:10px 14px;border-radius:14px;background:${esUsuario ? '#f0f0f0' : '#0b3d2e'};color:${esUsuario ? '#222' : 'white'};">
             ${m.content.replace(/\n/g, '<br>')}
+            ${hora ? `<div style="font-size:10px;opacity:0.55;margin-top:5px;text-align:right;">${hora}</div>` : ''}
           </div>
         </div>`;
     }).join('');
 
     panelDerecho = `
       <div style="padding:16px;">
-        <h3 style="margin:0 0 4px;color:#0b3d2e;">${estado.datos?.nombre || numeroSeleccionado}</h3>
-        <p style="color:#666;font-size:13px;margin:0 0 16px;">${numeroSeleccionado} · Flujo: ${estado.flujo || '-'}</p>
+        <h3 style="margin:0 0 4px;color:#0b3d2e;">${numeroSeleccionado === nicoleNumero ? 'Nicole Vinueza — Derivaciones' : (estado.datos?.nombre || numeroSeleccionado)}</h3>
+        <p style="color:#666;font-size:13px;margin:0 0 16px;">${numeroSeleccionado} · ${numeroSeleccionado === nicoleNumero ? 'Resúmenes enviados' : 'Flujo: ' + (estado.flujo || '-')}</p>
         <div>${burbujas}</div>
       </div>`;
   }
