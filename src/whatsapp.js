@@ -31,7 +31,14 @@ async function sendMessage(to, text) {
     throw new Error(`WhatsApp API ${res.status}: ${errBody}`);
   }
 
-  return res.json();
+  const json = await res.json();
+  const msgId = json?.messages?.[0]?.id;
+  const msgStatus = json?.messages?.[0]?.message_status;
+  console.log(`[wa] sendMessage → to:${to} id:${msgId || '-'} status:${msgStatus || 'accepted'}`);
+  if (msgStatus === 'failed') {
+    throw new Error(`WhatsApp mensaje rechazado internamente: ${JSON.stringify(json)}`);
+  }
+  return json;
 }
 
 // Envía un mensaje de plantilla aprobada (obligatorio para mensajes que la
