@@ -38,6 +38,10 @@ function get(numero) {
       followupPendiente: false,
     };
   }
+  // Garantiza historial aunque la entrada fue creada por set() sin ese campo
+  if (!Array.isArray(conversations[numero].historial)) {
+    conversations[numero].historial = [];
+  }
   return conversations[numero];
 }
 
