@@ -644,9 +644,9 @@ function renderConversacionesPage(numeroSeleccionado) {
         <meta charset="utf-8">
       </head>
       <body style="background:#0b3d2e;min-height:100vh;margin:0;padding:24px;font-family:sans-serif;">
-        <div style="background:white;border-radius:16px;max-width:1000px;margin:0 auto;display:flex;min-height:600px;overflow:hidden;">
+        <div style="background:white;border-radius:16px;max-width:1000px;margin:0 auto;display:flex;height:calc(100vh - 48px);overflow:hidden;">
           <div style="width:320px;border-right:1px solid #eee;display:flex;flex-direction:column;">
-            <div style="padding:16px;border-bottom:1px solid #eee;">
+            <div style="padding:16px;border-bottom:1px solid #eee;flex-shrink:0;">
               <h3 style="margin:0 0 12px;color:#0b3d2e;">Conversaciones</h3>
               <div style="position:relative;">
                 <input id="buscador" type="text" placeholder="Buscar nombre o número..."
@@ -665,7 +665,7 @@ function renderConversacionesPage(numeroSeleccionado) {
               <p id="sin-resultados" style="display:none;padding:16px;color:#999;">Sin resultados.</p>
             </div>
           </div>
-          <div style="flex:1;overflow-y:auto;">
+          <div id="panel-chat" style="flex:1;overflow-y:auto;">
             ${panelDerecho}
           </div>
         </div>
@@ -675,7 +675,23 @@ function renderConversacionesPage(numeroSeleccionado) {
           const filas = Array.from(document.querySelectorAll('.fila-conv'));
           const botonesFiltro = Array.from(document.querySelectorAll('.filtro-estado'));
           const sinResultados = document.getElementById('sin-resultados');
+          const listaConv = document.getElementById('lista-conversaciones');
+          const panelChat = document.getElementById('panel-chat');
           let filtroActivo = 'Todos';
+
+          // Scroll chat al mensaje más reciente
+          if (panelChat) panelChat.scrollTop = panelChat.scrollHeight;
+
+          // Restaurar posición de la lista al volver de un chat
+          const scrollGuardado = sessionStorage.getItem('listaScroll');
+          if (listaConv && scrollGuardado) listaConv.scrollTop = parseInt(scrollGuardado, 10);
+
+          // Guardar posición de la lista antes de navegar a un chat
+          filas.forEach((fila) => {
+            fila.addEventListener('click', () => {
+              sessionStorage.setItem('listaScroll', listaConv.scrollTop);
+            });
+          });
 
           function aplicarFiltros() {
             const texto = buscador.value.trim().toLowerCase();
