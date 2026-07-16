@@ -72,7 +72,16 @@ function init() {
 async function enviarFollowup(numero, estado, tipo) {
   const nombre = estado.datos?.nombre || '';
   const sector = estado.datos?.sector || '';
-  let texto = '';
+
+  const textosPorTipo = {
+    '24h_propietario': `[Seguimiento automático 24h] Hola${nombre ? ' ' + nombre : ''}, ¿pudo revisar la información que le compartimos sobre vender su propiedad en ${sector || 'su zona'}? Quedamos a su disposición 🏠`,
+    '24h_asesor':      `[Seguimiento automático 24h] Hola${nombre ? ' ' + nombre : ''}, ¿tuvo oportunidad de revisar la información sobre unirse a RE/MAX Impacta? Con gusto le respondemos cualquier duda.`,
+    '72h_asesor':      `[Seguimiento automático 72h] Hola${nombre ? ' ' + nombre : ''}, seguimos interesados en su perfil. ¿Le gustaría retomar la conversación sobre su carrera inmobiliaria?`,
+    '7d_asesor':       `[Seguimiento automático 7d] Hola${nombre ? ' ' + nombre : ''}, hace una semana conversamos sobre la oportunidad en RE/MAX Impacta. ¿Sigue siendo de su interés?`,
+    '30d_asesor':      `[Reactivación 30d] Hola${nombre ? ' ' + nombre : ''}, le escribimos desde RE/MAX Impacta. ¿Ha tenido oportunidad de evaluar unirse a nuestro equipo?`,
+    '48h_propietario': `[Seguimiento automático 48h] ${nombre || 'Hola'}, solo quería asegurarme de que no quedó con dudas. Cuando quiera retomar, acá estamos 🏠`,
+    '30d_cobertura':   `[Reactivación 30d] ¡Hola${nombre ? ' ' + nombre : ''}! Le escribo desde RE/MAX Impacta. ¿Su propiedad sigue disponible? Si la situación cambió y necesita apoyo, con gusto le orientamos 🏠`,
+  };
 
   // Todos los follow-ups usan plantillas aprobadas (obligatorio fuera de la ventana de 24hs)
   const plantillas = {
@@ -89,24 +98,20 @@ async function enviarFollowup(numero, estado, tipo) {
   if (plantillas[tipo]) {
     try {
       await plantillas[tipo]();
+      memory.addMessage(numero, 'assistant', textosPorTipo[tipo] || `[Seguimiento automático: ${tipo}]`);
+      console.log(`[scheduler] Plantilla ${tipo} enviada a ${numero}`);
     } catch (e) {
       console.error(`[scheduler] Error enviando plantilla ${tipo} a ${numero}:`, e.message);
     }
     return;
   }
 
-  switch (tipo) {
-    case '48h_propietario':
-      texto = `${nombre || 'Hola'}, solo quería asegurarme de que no quedó con dudas. Cuando quiera retomar, acá estamos 🏠`;
-      break;
-    case '30d_cobertura':
-      texto = `¡Hola${nombre ? ' ' + nombre : ''}! Le escribo desde RE/MAX Impacta. ¿Su propiedad sigue disponible? Si la situación cambió y necesita apoyo, con gusto le orientamos 🏠`;
-      break;
-  }
-
+  const texto = textosPorTipo[tipo] || '';
   if (texto) {
     try {
       await whatsapp.sendMessage(numero, texto);
+      memory.addMessage(numero, 'assistant', texto);
+      console.log(`[scheduler] Followup ${tipo} enviado a ${numero}`);
     } catch (e) {
       console.error(`[scheduler] Error enviando followup ${tipo} a ${numero}:`, e.message);
     }
