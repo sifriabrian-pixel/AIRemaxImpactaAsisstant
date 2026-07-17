@@ -64,8 +64,10 @@ async function buscarEnSheet(fecha, turno) {
       range: "'RE/MAX Impacta — Sistema de Guardias (TEMPLATE)'!A:D",
     });
     const rows = res.data.values || [];
+    let fechaActual = '';
     for (const row of rows.slice(1)) { // slice(1) salta la fila de encabezados
-      if (row[0] === fecha && row[1] === turno) {
+      if (row[0]) fechaActual = row[0]; // propaga la fecha aunque la celda esté vacía (celdas combinadas)
+      if (fechaActual === fecha && row[1] === turno) {
         return { nombre: row[2], whatsapp: row[3] };
       }
     }
