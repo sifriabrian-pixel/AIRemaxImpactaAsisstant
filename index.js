@@ -398,8 +398,8 @@ async function procesarMensaje(numeroLimpio, texto) {
   }
 }
 
-function renderStatsPage(fechaFiltro) {
-  const s = stats.getStats(fechaFiltro);
+function renderStatsPage(fechaDesde, fechaHasta) {
+  const s = stats.getStats(fechaDesde, fechaHasta);
   const desde = new Date(s.instaladoDesde).toLocaleDateString('es-EC');
   const actualizado = new Date().toLocaleString('es-EC');
 
@@ -430,8 +430,11 @@ function renderStatsPage(fechaFiltro) {
           <h2 style="margin:0;color:#0b3d2e;">🏠 REMAX Impacta — Valentina</h2>
           <p style="color:#666;margin-top:4px;">Estadísticas del agente desde ${desde}</p>
 
-          <form method="GET" action="/stats" style="margin:16px 0;display:flex;gap:8px;align-items:center;">
-            <input type="date" name="fecha" value="${fechaFiltro || ''}" style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;">
+          <form method="GET" action="/stats" style="margin:16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:13px;color:#555;">Desde</label>
+            <input type="date" name="desde" value="${fechaDesde || ''}" style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;">
+            <label style="font-size:13px;color:#555;">Hasta</label>
+            <input type="date" name="hasta" value="${fechaHasta || ''}" style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;">
             <button type="submit" style="padding:6px 14px;border-radius:8px;border:none;background:#0b3d2e;color:white;cursor:pointer;">Filtrar</button>
             <a href="/stats" style="color:#0b3d2e;text-decoration:underline;">Ver todo</a>
           </form>
@@ -736,9 +739,10 @@ function startServer() {
     }
 
     if (parsedUrl.pathname === '/stats') {
-      const fechaFiltro = parsedUrl.searchParams.get('fecha') || null;
+      const fechaDesde = parsedUrl.searchParams.get('desde') || null;
+      const fechaHasta = parsedUrl.searchParams.get('hasta') || null;
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(renderStatsPage(fechaFiltro));
+      res.end(renderStatsPage(fechaDesde, fechaHasta));
       return;
     }
 

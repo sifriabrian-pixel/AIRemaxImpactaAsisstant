@@ -48,9 +48,14 @@ const HANDOFF_TIPOS = [
 
 const FLUJO_TIPOS = ['propietario', 'asesor', 'comprador', 'arrendatario'];
 
-function getStats(fechaFiltro) {
-  const filtrados = fechaFiltro
-    ? events.filter(e => e.fecha.startsWith(fechaFiltro))
+function getStats(fechaDesde, fechaHasta) {
+  const filtrados = (fechaDesde || fechaHasta)
+    ? events.filter(e => {
+        const d = e.fecha.slice(0, 10); // YYYY-MM-DD
+        if (fechaDesde && d < fechaDesde) return false;
+        if (fechaHasta && d > fechaHasta) return false;
+        return true;
+      })
     : events;
 
   const porTipo = (tipo) => filtrados.filter(e => e.tipo === tipo);
