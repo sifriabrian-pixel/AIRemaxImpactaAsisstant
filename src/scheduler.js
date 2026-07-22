@@ -108,7 +108,7 @@ async function enviarFollowup(numero, estado, tipo) {
     '30d_asesor':      `[Reactivación 30d] Hola${nombre ? ' ' + nombre : ''}, le escribimos desde RE/MAX Impacta. ¿Ha tenido oportunidad de evaluar unirse a nuestro equipo?`,
     '48h_propietario': `[Seguimiento automático 48h] ${nombre || 'Hola'}, solo quería asegurarme de que no quedó con dudas. Cuando quiera retomar, acá estamos 🏠`,
     '30d_cobertura':   `[Reactivación 30d] ¡Hola${nombre ? ' ' + nombre : ''}! Le escribo desde RE/MAX Impacta. ¿Su propiedad sigue disponible? Si la situación cambió y necesita apoyo, con gusto le orientamos 🏠`,
-    'recordatorio_entrevista_24h': `[Recordatorio 24h] Hola${nombre ? ' ' + nombre : ''} 👋 Le recuerdo su entrevista mañana${entrevistaFecha ? ' ' + entrevistaFecha : ''} a las ${entrevistaHora}, en Centro Comercial la Y, Local 025, Quito, con Nicole Vinueza. ¿Confirma su asistencia?`,
+    'recordatorio_entrevista_24h': `[Recordatorio 24h] Hola${nombre ? ' ' + nombre : ''} 👋 Le recuerdo su entrevista mañana${entrevistaFecha ? ' ' + entrevistaFecha : ''} a las ${entrevistaHora}, en Centro Comercial la Y, Local 025, Quito, en la oficina de RE/MAX IMPACTA ¿Confirma su asistencia?`,
     'recordatorio_entrevista_4h':  `[Recordatorio 4h] ${nombre || 'Hola'}, en unas horas es su entrevista — hoy a las ${entrevistaHora} en Centro Comercial la Y, Local 025, Quito. La espera Nicole Vinueza. ¿Todo listo para asistir?`,
   };
 
