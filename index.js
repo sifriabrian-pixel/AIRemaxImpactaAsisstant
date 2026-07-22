@@ -7,6 +7,7 @@ const scheduler = require('./src/scheduler');
 const guardias = require('./src/guardias');
 const stats = require('./src/stats');
 const whatsapp = require('./src/whatsapp');
+const { getSesionConfig, getCuposUsados } = require('./src/sessions');
 
 const NUMEROS_AUTORIZADOS = (process.env.NUMEROS_AUTORIZADOS || '').split(',').map(n => n.trim()).filter(Boolean);
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
@@ -18,6 +19,7 @@ const TRIGGERS = [
   'FOLLOWUP_PROPIETARIO_FUERA_COBERTURA',
   'HANDOFF_ASESOR',
   'FOLLOWUP_ASESOR',
+  'AGENDA_ENTREVISTA',
   'HANDOFF_COMPRADOR',
   'HANDOFF_ARRENDATARIO',
   'HANDOFF_GENERAL',
@@ -50,7 +52,10 @@ function nicoleParam(texto) {
 }
 
 function formatResumenAsesor(telefono, datos) {
-  return `🔔 RECLUTAMIENTO — Nuevo prospecto asesor calificado
+  const entrevistaInfo = datos.entrevistaConfirmada
+    ? `\nEntrevista agendada ✅: ${datos.entrevistaFecha || '-'} ${datos.entrevistaHora || '14:30'}\n📍 CC La Y, Local 025, Quito`
+    : '\n[Sin entrevista agendada]';
+  return `🔔 RECLUTAMIENTO — Entrevista agendada ✅
 
 Nombre: ${datos.nombre || '-'} · ${telefono}
 Edad: ${datos.edad || '-'}
@@ -59,12 +64,9 @@ Ciudad: ${datos.ciudad || '-'}
 Experiencia: ${datos.experiencia || '-'}
 Situación actual: ${datos.situacion || '-'}
 Disponibilidad: ${datos.disponibilidad || '-'}
-Motivación: ${datos.motivacion || '-'}
-Otra inmobiliaria: ${datos.otraInmobiliaria || '-'}
-Fondo inicial: ${datos.fondoInicial || '-'}
-Modelo comisión: ${datos.modeloComision || '-'}
+Motivación: ${datos.motivacion || '-'}${entrevistaInfo}
 
-[Le compartí el test DISC y le pedí su hoja de vida. Queda a la espera de tu contacto.]`;
+[Se le pidió CV y test DISC. Queda confirmada la entrevista con Nicole Vinueza.]`;
 }
 
 function formatResumenComprador(telefono, datos) {
@@ -190,6 +192,23 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
           datos: { ...datos, descalificado: datos.descalificado || false },
         });
         console.log('[followup] Asesor registrado para follow-up');
+        break;
+      }
+
+      case 'AGENDA_ENTREVISTA': {
+        memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+        stats.logEvent('agenda_entrevista', numeroLimpio);
+        if (process.env.WHATSAPP_NICOLE) {
+          try {
+            const resumenAsesor = formatResumenAsesor(numeroLimpio, datos);
+            const msgNicole = `📋 RECLUTAMIENTO — Entrevista agendada\n\n${resumenAsesor}`;
+            await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole', 'es_EC', { '1': nicoleParam(msgNicole) });
+            memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', msgNicole);
+            console.log(`[handoff] Entrevista asesor agendada — Nicole notificada. Fecha: ${datos.entrevistaFecha || 'sin fecha'}`);
+          } catch (e) {
+            console.error(`[handoff] FALLO notificación a Nicole (agenda entrevista):`, e.message);
+          }
+        }
         break;
       }
 
@@ -326,10 +345,15 @@ async function procesarMensaje(numeroLimpio, texto) {
     .filter(m => m.role === 'user' || m.role === 'assistant')
     .map(({ role, content }) => ({ role, content }));
 
+  // Construir contexto de sesión para el flujo asesor
+  const sesionCfg = getSesionConfig();
+  const cuposUsados = getCuposUsados(sesionCfg.fecha, memory.getAll());
+  const sesionContext = { ...sesionCfg, cuposLibres: Math.max(0, sesionCfg.cupoMax - cuposUsados) };
+
   // Llamar a Claude
   let respuesta;
   try {
-    respuesta = await chat(historial);
+    respuesta = await chat(historial, sesionContext);
   } catch (e) {
     console.error('[claude] Error:', e.message);
     await whatsapp.sendMessage(numeroLimpio, 'Hubo un inconveniente técnico. Por favor intente nuevamente en unos minutos.');
@@ -381,7 +405,7 @@ async function procesarMensaje(numeroLimpio, texto) {
     // Detectar flujo desde el trigger para extraer datos correctamente
     const flujoDelTrigger =
       trigger.includes('PROPIETARIO') || trigger.includes('IMBABURA') ? 'propietario' :
-      trigger.includes('ASESOR') ? 'asesor' :
+      trigger.includes('ASESOR') || trigger === 'AGENDA_ENTREVISTA' ? 'asesor' :
       trigger.includes('COMPRADOR') ? 'comprador' :
       trigger.includes('ARRENDATARIO') ? 'arrendatario' : null;
 

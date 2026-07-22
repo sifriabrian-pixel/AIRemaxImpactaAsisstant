@@ -23,7 +23,7 @@ function init() {
     }
   });
 
-  // Follow-ups a leads que no completaron (revisar cada hora)
+  // Follow-ups a leads que no completaron + recordatorios de entrevista (revisar cada hora)
   cron.schedule('0 * * * *', async () => {
     const ahora = new Date();
     const todos = memory.getAll();
@@ -54,6 +54,21 @@ function init() {
         }
       }
 
+      // Recordatorios de entrevista agendada (24h y 4h antes)
+      if (estado.flujo === 'asesor' && estado.datos?.entrevistaConfirmada && estado.datos?.entrevistaFecha) {
+        const entrevistaMs = parseFechaHoraEntrevista(estado.datos.entrevistaFecha, estado.datos.entrevistaHora || '14:30');
+        if (entrevistaMs) {
+          const horasHasta = (entrevistaMs - ahora.getTime()) / (1000 * 60 * 60);
+          if (horasHasta > 0 && horasHasta <= 4 && !estado.recordatorio4h) {
+            await enviarFollowup(numero, estado, 'recordatorio_entrevista_4h');
+            memory.set(numero, { recordatorio4h: true });
+          } else if (horasHasta > 4 && horasHasta <= 25 && !estado.recordatorio24h) {
+            await enviarFollowup(numero, estado, 'recordatorio_entrevista_24h');
+            memory.set(numero, { recordatorio24h: true });
+          }
+        }
+      }
+
       // Reactivar propietarios fuera de cobertura a los 30 días (por si cambió su situación)
       if (estado.datos?.fueraCobertura && diff >= 720 && !estado.followup30d_cobertura) {
         await enviarFollowup(numero, estado, '30d_cobertura');
@@ -69,9 +84,21 @@ function init() {
   });
 }
 
+// fecha: DD/MM/YYYY, hora: HH:MM (Ecuador UTC-5 = UTC+0-5h → sumar 5h para obtener UTC)
+function parseFechaHoraEntrevista(fecha, hora) {
+  if (!fecha) return null;
+  const parts = fecha.split('/');
+  if (parts.length !== 3) return null;
+  const [d, m, y] = parts.map(Number);
+  const [h, min] = (hora || '14:30').split(':').map(Number);
+  return Date.UTC(y, m - 1, d, h + 5, min, 0);
+}
+
 async function enviarFollowup(numero, estado, tipo) {
   const nombre = estado.datos?.nombre || '';
   const sector = estado.datos?.sector || '';
+  const entrevistaFecha = estado.datos?.entrevistaFecha || '';
+  const entrevistaHora = estado.datos?.entrevistaHora || '14:30';
 
   const textosPorTipo = {
     '24h_propietario': `[Seguimiento automático 24h] Hola${nombre ? ' ' + nombre : ''}, ¿pudo revisar la información que le compartimos sobre vender su propiedad en ${sector || 'su zona'}? Quedamos a su disposición 🏠`,
@@ -81,6 +108,8 @@ async function enviarFollowup(numero, estado, tipo) {
     '30d_asesor':      `[Reactivación 30d] Hola${nombre ? ' ' + nombre : ''}, le escribimos desde RE/MAX Impacta. ¿Ha tenido oportunidad de evaluar unirse a nuestro equipo?`,
     '48h_propietario': `[Seguimiento automático 48h] ${nombre || 'Hola'}, solo quería asegurarme de que no quedó con dudas. Cuando quiera retomar, acá estamos 🏠`,
     '30d_cobertura':   `[Reactivación 30d] ¡Hola${nombre ? ' ' + nombre : ''}! Le escribo desde RE/MAX Impacta. ¿Su propiedad sigue disponible? Si la situación cambió y necesita apoyo, con gusto le orientamos 🏠`,
+    'recordatorio_entrevista_24h': `[Recordatorio 24h] Hola${nombre ? ' ' + nombre : ''} 👋 Le recuerdo su entrevista mañana${entrevistaFecha ? ' ' + entrevistaFecha : ''} a las ${entrevistaHora}, en Centro Comercial la Y, Local 025, Quito, con Nicole Vinueza. ¿Confirma su asistencia?`,
+    'recordatorio_entrevista_4h':  `[Recordatorio 4h] ${nombre || 'Hola'}, en unas horas es su entrevista — hoy a las ${entrevistaHora} en Centro Comercial la Y, Local 025, Quito. La espera Nicole Vinueza. ¿Todo listo para asistir?`,
   };
 
   // Todos los follow-ups usan plantillas aprobadas (obligatorio fuera de la ventana de 24hs)
@@ -93,6 +122,9 @@ async function enviarFollowup(numero, estado, tipo) {
     '72h_asesor':  () => whatsapp.sendTemplate(numero, 'seguimiento_asesor_72h',  'es_EC', { nombre: nombre || 'cliente' }),
     '7d_asesor':   () => whatsapp.sendTemplate(numero, 'seguimiento_asesor_7d',   'es_EC', { nombre: nombre || 'cliente' }),
     '30d_asesor':  () => whatsapp.sendTemplate(numero, 'reactivacion_asesor_30d', 'es_EC', { nombre: nombre || 'cliente' }),
+    // Plantillas pendientes de crear en Meta Business Suite:
+    'recordatorio_entrevista_24h': () => whatsapp.sendTemplate(numero, 'recordatorio_entrevista_24h', 'es_EC', { nombre: nombre || 'candidato', fecha: entrevistaFecha || '', hora: entrevistaHora }),
+    'recordatorio_entrevista_4h':  () => whatsapp.sendTemplate(numero, 'recordatorio_entrevista_4h',  'es_EC', { nombre: nombre || 'candidato', hora: entrevistaHora }),
   };
 
   if (plantillas[tipo]) {

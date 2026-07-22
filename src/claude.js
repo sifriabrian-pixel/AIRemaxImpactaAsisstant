@@ -1,13 +1,12 @@
 const Anthropic = require('@anthropic-ai/sdk');
-const systemPromptBase = require('../prompts/impacta');
+const buildPrompt = require('../prompts/impacta');
 const { getFAQPrompt } = require('./faq');
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// System prompt completo = prompt base + FAQ aprobado
-const systemPrompt = systemPromptBase + getFAQPrompt();
+async function chat(historial, sesionContext) {
+  const systemPrompt = buildPrompt(sesionContext || {}) + getFAQPrompt();
 
-async function chat(historial) {
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
@@ -46,14 +45,14 @@ const SCHEMAS = {
   "nombre": "nombre completo",
   "edad": "edad si fue mencionada o null",
   "ciudad": "ciudad o sector donde vive",
-  "experiencia": "experiencia previa en ventas o áreas comerciales",
-  "situacion": "situación laboral actual",
+  "experiencia": "experiencia previa en ventas o áreas comerciales o null",
+  "situacion": "situación laboral actual o null",
   "disponibilidad": "inmediata / parcial / no tiene",
   "motivacion": "motivación principal expresada",
-  "otraInmobiliaria": "sí o no",
-  "fondoInicial": "disponible / no mencionado / no tiene",
-  "modeloComision": "abierto / entiende el modelo / rechaza",
-  "descalificado": "true si fue descalificado, false si calificó"
+  "descalificado": "true si fue descalificado, false si calificó",
+  "entrevistaConfirmada": "true si el candidato confirmó asistir a la entrevista, false si no",
+  "entrevistaFecha": "fecha exacta de la entrevista confirmada en formato DD/MM/YYYY o null",
+  "entrevistaHora": "hora de la entrevista confirmada (ej: 14:30) o null"
 }`,
   comprador: `{
   "nombre": "nombre completo si fue mencionado",
