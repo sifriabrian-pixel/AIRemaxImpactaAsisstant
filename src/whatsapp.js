@@ -88,6 +88,34 @@ async function sendTemplate(to, nombrePlantilla, idioma, parametros = {}) {
   return res.json();
 }
 
+// Reenvía un documento o imagen (por media_id de Meta) a otro número
+async function sendMedia(to, tipo, mediaId, caption) {
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId()}/messages`;
+  const mediaKey = tipo === 'document' ? 'document' : 'image';
+  const mediaObj = { id: mediaId };
+  if (caption) mediaObj.caption = caption;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to,
+      type: mediaKey,
+      [mediaKey]: mediaObj,
+    }),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(`WhatsApp API ${res.status}: ${errBody}`);
+  }
+  return res.json();
+}
+
 // Verifica que el webhook realmente venga de Meta (firma HMAC con el App Secret).
 // Si no hay WHATSAPP_APP_SECRET configurado, no verifica (no recomendado en producción).
 function verifySignature(rawBody, signatureHeader) {
@@ -102,4 +130,4 @@ function verifySignature(rawBody, signatureHeader) {
   return crypto.timingSafeEqual(a, b);
 }
 
-module.exports = { sendMessage, sendTemplate, verifySignature };
+module.exports = { sendMessage, sendTemplate, sendMedia, verifySignature };

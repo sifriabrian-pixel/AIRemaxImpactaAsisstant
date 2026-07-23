@@ -314,13 +314,14 @@ function handleOverrideCommand(texto, numeroLimpio) {
   return true;
 }
 
-async function recibirDocumentoCandidato(numeroLimpio, tipo) {
+async function recibirDocumentoCandidato(numeroLimpio, tipo, mediaId) {
   const estado = memory.get(numeroLimpio);
-  if (!estado.datos?.entrevistaConfirmada) return; // solo candidatos con entrevista agendada
+  // Solo candidatos del flujo asesor que ya completaron el proceso
+  if (estado.flujo !== 'asesor' || !estado.datos?.handoffListo) return;
 
-  const nombre = estado.datos?.nombre ? ` ${estado.datos.nombre}` : '';
+  const nombre = estado.datos?.nombre || '';
   const fecha = estado.datos?.entrevistaFecha ? ` el ${estado.datos.entrevistaFecha}` : '';
-  const respuesta = `¡Gracias${nombre}! Recibimos su documentación 📄 Nicole Vinueza la tendrá lista para la entrevista${fecha}. ¡Nos vemos pronto! 🙌`;
+  const respuesta = `¡Gracias${nombre ? ' ' + nombre : ''}! Recibimos su documentación 📄 Nicole Vinueza la tendrá lista para la entrevista${fecha}. ¡Nos vemos pronto! 🙌`;
 
   memory.addMessage(numeroLimpio, 'user', `[Archivo recibido: ${tipo}]`);
   try {
@@ -329,6 +330,17 @@ async function recibirDocumentoCandidato(numeroLimpio, tipo) {
     console.log(`[doc] Acuse de recibo enviado a ${numeroLimpio} (${tipo})`);
   } catch (e) {
     console.error(`[doc] Error enviando acuse de recibo a ${numeroLimpio}:`, e.message);
+  }
+
+  // Reenviar documento a Nicole
+  if (process.env.WHATSAPP_NICOLE && mediaId) {
+    try {
+      const caption = `📎 Documentación de candidato${nombre ? ' — ' + nombre : ''} (${numeroLimpio})${fecha}`;
+      await whatsapp.sendMedia(process.env.WHATSAPP_NICOLE, tipo, mediaId, caption);
+      console.log(`[doc] Documento reenviado a Nicole (${tipo})`);
+    } catch (e) {
+      console.error(`[doc] Error reenviando documento a Nicole:`, e.message);
+    }
   }
 }
 
@@ -838,7 +850,8 @@ function startServer() {
 
             // Documentos e imágenes: acusar recibo si es candidato con entrevista agendada
             if (msg.type === 'document' || msg.type === 'image') {
-              recibirDocumentoCandidato(numeroLimpio, msg.type).catch((e) =>
+              const mediaId = msg.document?.id || msg.image?.id || null;
+              recibirDocumentoCandidato(numeroLimpio, msg.type, mediaId).catch((e) =>
                 console.error('[webhook] Error procesando documento:', e.message),
               );
               continue;
