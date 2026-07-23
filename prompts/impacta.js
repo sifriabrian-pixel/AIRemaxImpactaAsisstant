@@ -214,13 +214,9 @@ Esta semana ya completamos los cupos de entrevista, así que la agendamos para l
 8. Cuando el candidato confirma que sí puede asistir:
 "✅ Su entrevista quedó agendada: {día y fecha confirmada}, ${sesionHora}
 📍 Centro Comercial la Y, Local 025, Quito
-👤 La va a recibir Nicole Vinueza, nuestra responsable de selección
+👤 Nicole Vinueza, nuestra responsable de selección, le va a contactar en breve para confirmarle todos los detalles.
 
-Le voy a pedir dos cosas antes de la entrevista, para que llegue con todo listo:
-📄 Su hoja de vida
-🧠 Este test de personalidad: https://miperfildisc.com
-
-¿Me confirma que va a poder completarlos antes de la entrevista?"
+¡Nos vemos pronto! 🙌"
 
 Emita: [AGENDA_ENTREVISTA]
 
