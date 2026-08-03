@@ -734,7 +734,9 @@ function renderConversacionesPage(numeroSeleccionado) {
           const sinResultados = document.getElementById('sin-resultados');
           const listaConv = document.getElementById('lista-conversaciones');
           const panelChat = document.getElementById('panel-chat');
-          let filtroActivo = 'Todos';
+
+          // Restaurar filtro activo desde sessionStorage
+          let filtroActivo = sessionStorage.getItem('filtroActivo') || 'Todos';
 
           // Scroll chat al mensaje más reciente
           if (panelChat) panelChat.scrollTop = panelChat.scrollHeight;
@@ -763,16 +765,23 @@ function renderConversacionesPage(numeroSeleccionado) {
             sinResultados.style.display = visibles === 0 ? 'block' : 'none';
           }
 
+          function activarBoton(filtro) {
+            filtroActivo = filtro;
+            sessionStorage.setItem('filtroActivo', filtro);
+            botonesFiltro.forEach((b) => {
+              const activo = b.dataset.filtro === filtro;
+              b.style.background = activo ? '#0b3d2e' : 'white';
+              b.style.color = activo ? 'white' : '#333';
+            });
+            aplicarFiltros();
+          }
+
+          // Aplicar filtro guardado al cargar
+          activarBoton(filtroActivo);
+
           buscador.addEventListener('input', aplicarFiltros);
           botonesFiltro.forEach((boton) => {
-            boton.addEventListener('click', () => {
-              filtroActivo = boton.dataset.filtro;
-              botonesFiltro.forEach((b) => {
-                b.style.background = b === boton ? '#0b3d2e' : 'white';
-                b.style.color = b === boton ? 'white' : '#333';
-              });
-              aplicarFiltros();
-            });
+            boton.addEventListener('click', () => activarBoton(boton.dataset.filtro));
           });
         </script>
       </body>
