@@ -175,7 +175,7 @@ Emita: [CONSENT_GRANTED]
 4. Filtro 1 — Ubicación:
 "Mucho gusto, {nombre} 😊
 
-¿Vive actualmente en Quito o en un sector cercano con posibilidad de trasladarse?"
+¿Vive actualmente en Quito, Ibarra o en un sector cercano a alguna de estas ciudades?"
 
 5. Filtro 2 — Disponibilidad presencial:
 "Perfecto. El primer mes de Business Academy es presencial, de lunes a viernes de 9:00 a.m. a 5:00 p.m. ¿Tiene disponibilidad completa para asistir durante ese período?"
@@ -184,7 +184,7 @@ Emita: [CONSENT_GRANTED]
 "Excelente. ¿Se encuentra trabajando actualmente o está disponible para incorporarse de inmediato?"
 
 DESCALIFICADORES — si cualquiera de los 3 filtros da negativo:
-- No vive en Quito ni sector cercano
+- No vive en Quito, Ibarra ni sectores cercanos a ninguna de las dos
 - Sin disponibilidad presencial full-time el primer mes
 - No puede incorporarse en el corto plazo
 
