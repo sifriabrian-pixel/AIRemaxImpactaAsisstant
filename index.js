@@ -7,7 +7,7 @@ const scheduler = require('./src/scheduler');
 const guardias = require('./src/guardias');
 const stats = require('./src/stats');
 const whatsapp = require('./src/whatsapp');
-const { getSesionConfig, getCuposUsados } = require('./src/sessions');
+const { getSesionConfig, getIbarraSesionConfig, getCuposUsados } = require('./src/sessions');
 
 const NUMEROS_AUTORIZADOS = (process.env.NUMEROS_AUTORIZADOS || '').split(',').map(n => n.trim()).filter(Boolean);
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
@@ -375,10 +375,23 @@ async function procesarMensaje(numeroLimpio, texto) {
     .filter(m => m.role === 'user' || m.role === 'assistant')
     .map(({ role, content }) => ({ role, content }));
 
-  // Construir contexto de sesión para el flujo asesor
+  // Construir contexto de sesión para el flujo asesor (Quito e Ibarra)
   const sesionCfg = getSesionConfig();
-  const cuposUsados = getCuposUsados(sesionCfg.fecha, memory.getAll());
-  const sesionContext = { ...sesionCfg, cuposLibres: Math.max(0, sesionCfg.cupoMax - cuposUsados) };
+  const ibarraCfg = getIbarraSesionConfig();
+  const todos = memory.getAll();
+  const cuposUsados = getCuposUsados(sesionCfg.fecha, todos);
+  const cuposIbarraUsados = getCuposUsados(ibarraCfg.fecha, todos);
+  const sesionContext = {
+    ...sesionCfg,
+    cuposLibres: Math.max(0, sesionCfg.cupoMax - cuposUsados),
+    ibarraDia: ibarraCfg.dia,
+    ibarraFecha: ibarraCfg.fecha,
+    ibarraHora: ibarraCfg.hora,
+    ibarraCupoMax: ibarraCfg.cupoMax,
+    ibarraDiaSiguiente: ibarraCfg.diaSiguiente,
+    ibarraFechaSiguiente: ibarraCfg.fechaSiguiente,
+    cuposIbarraLibres: Math.max(0, ibarraCfg.cupoMax - cuposIbarraUsados),
+  };
 
   // Llamar a Claude
   let respuesta;

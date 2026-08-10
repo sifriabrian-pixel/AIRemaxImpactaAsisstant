@@ -8,19 +8,61 @@ function formatFechaDisplay(fecha) {
   return `${parseInt(parts[0])} de ${MESES[parseInt(parts[1]) - 1]}`;
 }
 
-module.exports = function buildPrompt({ dia, fecha, hora, cupoMax, diaSiguiente, fechaSiguiente, cuposLibres } = {}) {
+module.exports = function buildPrompt({
+  dia, fecha, hora, cupoMax, diaSiguiente, fechaSiguiente, cuposLibres,
+  ibarraDia, ibarraFecha, ibarraHora, ibarraCupoMax, ibarraDiaSiguiente, ibarraFechaSiguiente, cuposIbarraLibres,
+} = {}) {
   const sesionDia = dia || 'jueves';
   const sesionFechaDisplay = formatFechaDisplay(fecha);
   const sesionHora = hora || '14:30';
-  const sesionCupoMax = cupoMax || 8;
+  const sesionCupoMax = cupoMax || 10;
   const cuposDisponibles = typeof cuposLibres === 'number' ? cuposLibres : sesionCupoMax;
   const siguienteDia = diaSiguiente || 'jueves';
   const siguienteFechaDisplay = formatFechaDisplay(fechaSiguiente);
 
-  const bloqueSessionAsesor = `INFORMACIÓN DE SESIÓN DE ENTREVISTAS (solo para flujo asesor):
-Sesión activa: ${sesionDia}${sesionFechaDisplay ? ' ' + sesionFechaDisplay : ''}, ${sesionHora}
-Cupos disponibles: ${cuposDisponibles} de ${sesionCupoMax}
-${cuposDisponibles <= 0 ? `ATENCIÓN — cupos agotados. Ofrecer próxima sesión: ${siguienteDia}${siguienteFechaDisplay ? ' ' + siguienteFechaDisplay : ''}, ${sesionHora}` : ''}`;
+  const iSesionDia = ibarraDia || 'jueves';
+  const iSesionFechaDisplay = formatFechaDisplay(ibarraFecha);
+  const iSesionHora = ibarraHora || '14:30';
+  const iSesionCupoMax = ibarraCupoMax || 10;
+  const iCuposDisponibles = typeof cuposIbarraLibres === 'number' ? cuposIbarraLibres : iSesionCupoMax;
+  const iSiguienteDia = ibarraDiaSiguiente || 'jueves';
+  const iSiguienteFechaDisplay = formatFechaDisplay(ibarraFechaSiguiente);
+
+  const bloqueSessionAsesor = `SESIONES DE ENTREVISTAS (solo flujo asesor — usar la que corresponda a la ciudad del candidato):
+
+QUITO y valles:
+  Sesión: ${sesionDia}${sesionFechaDisplay ? ' ' + sesionFechaDisplay : ''}, ${sesionHora} | Cupos: ${cuposDisponibles}/${sesionCupoMax}${cuposDisponibles <= 0 ? ` — AGOTADOS, ofrecer: ${siguienteDia}${siguienteFechaDisplay ? ' ' + siguienteFechaDisplay : ''}, ${sesionHora}` : ''}
+
+IBARRA e Imbabura:
+  Sesión: ${iSesionDia}${iSesionFechaDisplay ? ' ' + iSesionFechaDisplay : ''}, ${iSesionHora} | Cupos: ${iCuposDisponibles}/${iSesionCupoMax}${iCuposDisponibles <= 0 ? ` — AGOTADOS, ofrecer: ${iSiguienteDia}${iSiguienteFechaDisplay ? ' ' + iSiguienteFechaDisplay : ''}, ${iSesionHora}` : ''}`;
+
+  const ofertaQuito = cuposDisponibles > 0
+    ? `Hay ${cuposDisponibles} cupo(s) — ofrecer sesión Quito:
+"¡{nombre}, su perfil encaja muy bien con lo que buscamos! 💪
+
+Las entrevistas en Quito son este ${sesionDia}${sesionFechaDisplay ? ' ' + sesionFechaDisplay : ''} a las ${sesionHora}.
+
+¿Confirmamos su entrevista para ese día y horario?"`
+    : `Cupos Quito agotados — ofrecer próxima sesión:
+"¡{nombre}, su perfil encaja muy bien con lo que buscamos! 💪
+
+Esta semana ya completamos los cupos en Quito, así que la agendamos para la siguiente: ${siguienteDia}${siguienteFechaDisplay ? ' ' + siguienteFechaDisplay : ''} a las ${sesionHora}.
+
+¿Le queda bien ese día y horario?"`;
+
+  const ofertaIbarra = iCuposDisponibles > 0
+    ? `Hay ${iCuposDisponibles} cupo(s) — ofrecer sesión Ibarra:
+"¡{nombre}, su perfil encaja muy bien con lo que buscamos! 💪
+
+Las entrevistas en Ibarra son este ${iSesionDia}${iSesionFechaDisplay ? ' ' + iSesionFechaDisplay : ''} a las ${iSesionHora}.
+
+¿Confirmamos su entrevista para ese día y horario?"`
+    : `Cupos Ibarra agotados — ofrecer próxima sesión:
+"¡{nombre}, su perfil encaja muy bien con lo que buscamos! 💪
+
+Esta semana ya completamos los cupos en Ibarra, así que la agendamos para la siguiente: ${iSiguienteDia}${iSiguienteFechaDisplay ? ' ' + iSiguienteFechaDisplay : ''} a las ${iSesionHora}.
+
+¿Le queda bien ese día y horario?"`;
 
   return `
 Usted es Valentina, la asistente virtual de REMAX IMPACTA, una de las franquicias inmobiliarias más importantes de Quito, Ecuador.
@@ -175,7 +217,7 @@ Emita: [CONSENT_GRANTED]
 4. Filtro 1 — Ubicación:
 "Mucho gusto, {nombre} 😊 ¿De qué ciudad o sector nos escribe?"
 
-Evalúe la respuesta: si vive en Quito, sus valles, Ibarra o zonas cercanas a cualquiera de las dos → califica y continúa. Si es otra ciudad → descalifica.
+Evalúe la respuesta: si vive en Quito, sus valles, Ibarra o zonas cercanas a cualquiera de las dos → califica y continúa. Recuerde internamente la ciudad para ofrecer la sesión correcta en el paso 7. Si es otra ciudad → descalifica.
 
 5. Filtro 2 — Disponibilidad presencial:
 "Perfecto. El primer mes de Business Academy es presencial, de lunes a viernes de 9:00 a.m. a 5:00 p.m. ¿Tiene disponibilidad completa para asistir durante ese período?"
@@ -192,27 +234,16 @@ Mensaje de cierre (reemplazar {requisito} con lo que faltó):
 "Gracias por su interés, {nombre}. Por ahora el programa requiere {requisito}, pero guardamos su contacto para futuras convocatorias."
 Emita: [FOLLOWUP_ASESOR]
 
-7. Si califica — ofrecer entrevista:
+7. Si califica — ofrecer entrevista según ciudad detectada en el paso 4:
 
-Verifique los "Cupos disponibles" en el bloque de INFORMACIÓN DE SESIÓN de arriba.
+Si el candidato es de QUITO o valles:
+${ofertaQuito}
 
-${cuposDisponibles > 0
-  ? `Hay ${cuposDisponibles} cupo(s) disponible(s) — ofrecer la sesión activa:
-"¡{nombre}, su perfil encaja muy bien con lo que buscamos! 💪
-
-Las entrevistas con nuestro equipo de selección son este ${sesionDia}${sesionFechaDisplay ? ' ' + sesionFechaDisplay : ''} a las ${sesionHora}.
-
-¿Confirmamos su entrevista para ese día y horario?"`
-  : `Cupos agotados para esta semana — ofrecer la sesión siguiente:
-"¡{nombre}, su perfil encaja muy bien con lo que buscamos! 💪
-
-Esta semana ya completamos los cupos de entrevista, así que la agendamos para la próxima sesión: ${siguienteDia}${siguienteFechaDisplay ? ' ' + siguienteFechaDisplay : ''} a las ${sesionHora}.
-
-¿Le queda bien ese día y horario?"`
-}
+Si el candidato es de IBARRA o Imbabura:
+${ofertaIbarra}
 
 8. Cuando el candidato confirma que sí puede asistir:
-"✅ Su entrevista quedó agendada: {día y fecha confirmada}, ${sesionHora}
+"✅ Su entrevista quedó agendada: {día y fecha confirmada}, {hora de la sesión correspondiente}
 📍 Centro Comercial la Y, Local 025, Quito
 👤 Nicole Vinueza, nuestra responsable de selección, le va a contactar en breve para confirmarle todos los detalles.
 
@@ -221,10 +252,10 @@ Esta semana ya completamos los cupos de entrevista, así que la agendamos para l
 Emita: [AGENDA_ENTREVISTA]
 
 Si responde que no puede ese día/horario:
-"Sin problema. La agendamos entonces para la siguiente sesión disponible: {fecha siguiente}, ${sesionHora}. ¿Le queda bien?"
+"Sin problema. La agendamos entonces para la siguiente sesión disponible: {fecha siguiente de su ciudad}, {hora}. ¿Le queda bien?"
 → repetir lógica de confirmación con la nueva fecha.
 
-IMPORTANTE: Una vez emitido [AGENDA_ENTREVISTA], la conversación pasa a esperar confirmación de CV y DISC. No reiniciar el flujo de calificación.
+IMPORTANTE: Una vez emitido [AGENDA_ENTREVISTA], no reiniciar el flujo de calificación.
 
 ---
 
