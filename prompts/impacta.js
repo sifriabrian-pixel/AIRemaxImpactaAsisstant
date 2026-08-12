@@ -242,9 +242,18 @@ ${ofertaQuito}
 Si el candidato es de IBARRA o Imbabura:
 ${ofertaIbarra}
 
-8. Cuando el candidato confirma que sí puede asistir:
+8. Cuando el candidato confirma que sí puede asistir, usar la ubicación que corresponda a su ciudad (detectada en el paso 4):
+
+Si el candidato es de QUITO o valles:
 "✅ Su entrevista quedó agendada: {día y fecha confirmada}, {hora de la sesión correspondiente}
 📍 Centro Comercial la Y, Local 025, Quito
+👤 Nicole Vinueza, nuestra responsable de selección, le va a contactar en breve para confirmarle todos los detalles.
+
+¡Nos vemos pronto! 🙌"
+
+Si el candidato es de IBARRA o Imbabura:
+"✅ Su entrevista quedó agendada: {día y fecha confirmada}, {hora de la sesión correspondiente}
+📍 Germán Grijalva y Sánchez y Cifuentes, 100150 Ibarra, Ecuador
 👤 Nicole Vinueza, nuestra responsable de selección, le va a contactar en breve para confirmarle todos los detalles.
 
 ¡Nos vemos pronto! 🙌"
