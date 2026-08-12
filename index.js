@@ -51,9 +51,19 @@ function nicoleParam(texto) {
   return texto.replace(/\n+/g, ' | ').replace(/\s{5,}/g, '    ');
 }
 
+const IBARRA_KEYWORDS_IDX = ['ibarra', 'imbabura', 'otavalo', 'cotacachi', 'atuntaqui', 'antonio ante', 'pimampiro', 'urcuquí'];
+
+function getDireccionEntrevista(ciudad) {
+  if (ciudad && IBARRA_KEYWORDS_IDX.some(k => ciudad.toLowerCase().includes(k))) {
+    return 'Germán Grijalva y Sánchez y Cifuentes, Ibarra';
+  }
+  return 'CC La Y, Local 025, Quito';
+}
+
 function formatResumenAsesor(telefono, datos) {
+  const direccion = getDireccionEntrevista(datos.ciudad);
   const entrevistaInfo = datos.entrevistaConfirmada
-    ? `\nEntrevista agendada ✅: ${datos.entrevistaFecha || '-'} ${datos.entrevistaHora || '14:30'}\n📍 CC La Y, Local 025, Quito`
+    ? `\nEntrevista agendada ✅: ${datos.entrevistaFecha || '-'} ${datos.entrevistaHora || '14:30'}\n📍 ${direccion}`
     : '\n[Sin entrevista agendada]';
   return `🔔 RECLUTAMIENTO — Entrevista agendada ✅
 

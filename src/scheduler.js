@@ -3,6 +3,19 @@ const memory = require('./memory');
 const whatsapp = require('./whatsapp');
 const { getAsesorDeGuardia } = require('./guardias');
 
+function nicoleParam(texto) {
+  return texto.replace(/\n+/g, ' | ').replace(/\s{5,}/g, '    ');
+}
+
+const IBARRA_KEYWORDS = ['ibarra', 'imbabura', 'otavalo', 'cotacachi', 'atuntaqui', 'antonio ante', 'pimampiro', 'urcuquí'];
+
+function getUbicacionEntrevista(ciudad) {
+  if (ciudad && IBARRA_KEYWORDS.some(k => ciudad.toLowerCase().includes(k))) {
+    return 'Germán Grijalva y Sánchez y Cifuentes, 100150 Ibarra';
+  }
+  return 'Centro Comercial la Y, Local 025, Quito';
+}
+
 function init() {
   // Cada minuto: revisar follow-ups de propietarios fuera de horario
   cron.schedule('* * * * *', async () => {
@@ -99,6 +112,8 @@ async function enviarFollowup(numero, estado, tipo) {
   const sector = estado.datos?.sector || '';
   const entrevistaFecha = estado.datos?.entrevistaFecha || '';
   const entrevistaHora = estado.datos?.entrevistaHora || '14:30';
+  const ciudad = estado.datos?.ciudad || '';
+  const ubicacion = getUbicacionEntrevista(ciudad);
 
   const textosPorTipo = {
     '24h_propietario': `[Seguimiento automático 24h] Hola${nombre ? ' ' + nombre : ''}, ¿pudo revisar la información que le compartimos sobre vender su propiedad en ${sector || 'su zona'}? Quedamos a su disposición 🏠`,
@@ -123,8 +138,8 @@ async function enviarFollowup(numero, estado, tipo) {
     '7d_asesor':   () => whatsapp.sendTemplate(numero, 'seguimiento_asesor_7d',   'es_EC', { nombre: nombre || 'cliente' }),
     '30d_asesor':  () => whatsapp.sendTemplate(numero, 'reactivacion_asesor_30d', 'es_EC', { nombre: nombre || 'cliente' }),
     // Plantillas pendientes de crear en Meta Business Suite:
-    'recordatorio_entrevista_24h': () => whatsapp.sendTemplate(numero, 'recordatorio_entrevista_24h', 'es_EC', { nombre: nombre || 'candidato', fecha: entrevistaFecha || '', hora: entrevistaHora }),
-    'recordatorio_entrevista_4h':  () => whatsapp.sendTemplate(numero, 'recordatorio_entrevista_4h',  'es_EC', { nombre: nombre || 'candidato', hora: entrevistaHora }),
+    'recordatorio_entrevista_24h': () => whatsapp.sendTemplate(numero, 'recordatorio_entrevista_24h_v2', 'es_EC', { nombre: nombre || 'candidato', fecha: entrevistaFecha || '', hora: entrevistaHora, ubicacion }),
+    'recordatorio_entrevista_4h':  () => whatsapp.sendTemplate(numero, 'recordatorio_entrevista_4h_v2',  'es_EC', { nombre: nombre || 'candidato', hora: entrevistaHora, ubicacion }),
   };
 
   if (plantillas[tipo]) {
@@ -152,7 +167,7 @@ async function enviarFollowup(numero, estado, tipo) {
 
 async function enviarResumenPropietario(asesor, numeroLead, datos) {
   const resumen = formatResumenPropietario(numeroLead, datos);
-  await whatsapp.sendMessage(asesor.whatsapp, resumen);
+  await whatsapp.sendTemplate(asesor.whatsapp, 'notificacion_lead_guardia', 'es_EC', { resumen: nicoleParam(resumen) });
 }
 
 function formatResumenPropietario(telefono, datos) {
