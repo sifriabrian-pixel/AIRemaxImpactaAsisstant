@@ -9,11 +9,9 @@ function nicoleParam(texto) {
 
 const IBARRA_KEYWORDS = ['ibarra', 'imbabura', 'otavalo', 'cotacachi', 'atuntaqui', 'antonio ante', 'pimampiro', 'urcuquí'];
 
-function getUbicacionEntrevista(ciudad) {
-  if (ciudad && IBARRA_KEYWORDS.some(k => ciudad.toLowerCase().includes(k))) {
-    return 'Germán Grijalva y Sánchez y Cifuentes, 100150 Ibarra';
-  }
-  return 'Centro Comercial la Y, Local 025, Quito';
+function sufijoCiudadTemplate(ciudad) {
+  if (ciudad && IBARRA_KEYWORDS.some(k => ciudad.toLowerCase().includes(k))) return 'ibarra';
+  return 'quito';
 }
 
 function init() {
@@ -113,7 +111,7 @@ async function enviarFollowup(numero, estado, tipo) {
   const entrevistaFecha = estado.datos?.entrevistaFecha || '';
   const entrevistaHora = estado.datos?.entrevistaHora || '14:30';
   const ciudad = estado.datos?.ciudad || '';
-  const ubicacion = getUbicacionEntrevista(ciudad);
+  const sufijo = sufijoCiudadTemplate(ciudad);
 
   const textosPorTipo = {
     '24h_propietario': `[Seguimiento automático 24h] Hola${nombre ? ' ' + nombre : ''}, ¿pudo revisar la información que le compartimos sobre vender su propiedad en ${sector || 'su zona'}? Quedamos a su disposición 🏠`,
@@ -123,8 +121,8 @@ async function enviarFollowup(numero, estado, tipo) {
     '30d_asesor':      `[Reactivación 30d] Hola${nombre ? ' ' + nombre : ''}, le escribimos desde RE/MAX Impacta. ¿Ha tenido oportunidad de evaluar unirse a nuestro equipo?`,
     '48h_propietario': `[Seguimiento automático 48h] ${nombre || 'Hola'}, solo quería asegurarme de que no quedó con dudas. Cuando quiera retomar, acá estamos 🏠`,
     '30d_cobertura':   `[Reactivación 30d] ¡Hola${nombre ? ' ' + nombre : ''}! Le escribo desde RE/MAX Impacta. ¿Su propiedad sigue disponible? Si la situación cambió y necesita apoyo, con gusto le orientamos 🏠`,
-    'recordatorio_entrevista_24h': `[Recordatorio 24h] Hola${nombre ? ' ' + nombre : ''} 👋 Le recuerdo su entrevista mañana${entrevistaFecha ? ' ' + entrevistaFecha : ''} a las ${entrevistaHora}, en Centro Comercial la Y, Local 025, Quito, en la oficina de RE/MAX IMPACTA ¿Confirma su asistencia?`,
-    'recordatorio_entrevista_4h':  `[Recordatorio 4h] ${nombre || 'Hola'}, en unas horas es su entrevista — hoy a las ${entrevistaHora} en Centro Comercial la Y, Local 025, Quito. La espera Nicole Vinueza. ¿Todo listo para asistir?`,
+    'recordatorio_entrevista_24h': `[Recordatorio 24h] Hola${nombre ? ' ' + nombre : ''} 👋 Le recuerdo su entrevista mañana${entrevistaFecha ? ' ' + entrevistaFecha : ''} a las ${entrevistaHora} en la oficina de RE/MAX IMPACTA (${sufijo}). ¿Confirma su asistencia?`,
+    'recordatorio_entrevista_4h':  `[Recordatorio 4h] ${nombre || 'Hola'}, en unas horas es su entrevista — hoy a las ${entrevistaHora} en la oficina de RE/MAX IMPACTA (${sufijo}). La espera Nicole Vinueza. ¿Todo listo para asistir?`,
   };
 
   // Todos los follow-ups usan plantillas aprobadas (obligatorio fuera de la ventana de 24hs)
@@ -137,9 +135,8 @@ async function enviarFollowup(numero, estado, tipo) {
     '72h_asesor':  () => whatsapp.sendTemplate(numero, 'seguimiento_asesor_72h',  'es_EC', { nombre: nombre || 'cliente' }),
     '7d_asesor':   () => whatsapp.sendTemplate(numero, 'seguimiento_asesor_7d',   'es_EC', { nombre: nombre || 'cliente' }),
     '30d_asesor':  () => whatsapp.sendTemplate(numero, 'reactivacion_asesor_30d', 'es_EC', { nombre: nombre || 'cliente' }),
-    // Plantillas pendientes de crear en Meta Business Suite:
-    'recordatorio_entrevista_24h': () => whatsapp.sendTemplate(numero, 'recordatorio_entrevista_24h_v2', 'es_EC', { nombre: nombre || 'candidato', fecha: entrevistaFecha || '', hora: entrevistaHora, ubicacion }),
-    'recordatorio_entrevista_4h':  () => whatsapp.sendTemplate(numero, 'recordatorio_entrevista_4h_v2',  'es_EC', { nombre: nombre || 'candidato', hora: entrevistaHora, ubicacion }),
+    'recordatorio_entrevista_24h': () => whatsapp.sendTemplate(numero, `recordatorio_entrevista_24h_${sufijo}`, 'es_EC', { nombre: nombre || 'candidato', fecha: entrevistaFecha || '', hora: entrevistaHora }),
+    'recordatorio_entrevista_4h':  () => whatsapp.sendTemplate(numero, `recordatorio_entrevista_4h_${sufijo}`,  'es_EC', { nombre: nombre || 'candidato', hora: entrevistaHora }),
   };
 
   if (plantillas[tipo]) {
