@@ -165,6 +165,16 @@ async function enviarFollowup(numero, estado, tipo) {
 async function enviarResumenPropietario(asesor, numeroLead, datos) {
   const resumen = formatResumenPropietario(numeroLead, datos);
   await whatsapp.sendTemplate(asesor.whatsapp, 'notificacion_lead_guardia', 'es_EC', { resumen: nicoleParam(resumen) });
+  const nicoleNumero = process.env.WHATSAPP_NICOLE;
+  if (nicoleNumero) {
+    try {
+      const msgNicole = `📋 CAPTACIÓN — Lead derivado a ${asesor.nombre}\n\n` + resumen;
+      await whatsapp.sendTemplate(nicoleNumero, 'notificacion_lead_nicole', 'es_EC', { '1': nicoleParam(msgNicole) });
+      console.log(`[scheduler] Resumen propietario enviado a Nicole`);
+    } catch (e) {
+      console.error(`[scheduler] FALLO notificación a Nicole (propietario guardia):`, e.message);
+    }
+  }
 }
 
 function formatResumenPropietario(telefono, datos) {

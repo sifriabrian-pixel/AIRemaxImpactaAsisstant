@@ -106,9 +106,13 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         const asesor = await guardias.getAsesorDeGuardia();
         if (asesor) {
           const resumen = scheduler.formatResumenPropietario(numeroLimpio, datos);
-          await whatsapp.sendMessage(asesor.whatsapp, resumen);
-          memory.set(asesor.whatsapp, { esGuardia: true, nombreGuardia: asesor.nombre });
-          memory.addMessage(asesor.whatsapp, 'assistant', resumen);
+          try {
+            await whatsapp.sendTemplate(asesor.whatsapp, 'notificacion_lead_guardia', 'es_EC', { resumen: nicoleParam(resumen) });
+            memory.set(asesor.whatsapp, { esGuardia: true, nombreGuardia: asesor.nombre });
+            memory.addMessage(asesor.whatsapp, 'assistant', resumen);
+          } catch (e) {
+            console.error(`[handoff] FALLO envío a asesor guardia:`, e.message);
+          }
           // Notificar a Nicole con el asesor asignado
           if (process.env.WHATSAPP_NICOLE) {
             try {
