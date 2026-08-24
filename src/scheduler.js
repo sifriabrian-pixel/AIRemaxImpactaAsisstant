@@ -18,17 +18,32 @@ function init() {
   // Cada minuto: revisar follow-ups de propietarios fuera de horario
   cron.schedule('* * * * *', async () => {
     const asesor = await getAsesorDeGuardia();
-    if (!asesor) return;
 
     const todos = memory.getAll();
     for (const [numero, estado] of Object.entries(todos)) {
       if (estado.followupPendiente && estado.flujo === 'propietario' && estado.datos?.handoffListo) {
-        try {
-          await enviarResumenPropietario(asesor, numero, estado.datos);
-          memory.set(numero, { followupPendiente: false });
-          console.log(`[scheduler] Resumen enviado a ${asesor.nombre} por lead ${numero}`);
-        } catch (e) {
-          console.error('[scheduler] Error enviando resumen:', e.message);
+        if (asesor) {
+          try {
+            await enviarResumenPropietario(asesor, numero, estado.datos);
+            memory.set(numero, { followupPendiente: false });
+            console.log(`[scheduler] Resumen enviado a ${asesor.nombre} por lead ${numero}`);
+          } catch (e) {
+            console.error('[scheduler] Error enviando resumen:', e.message);
+          }
+        } else if (!estado.nicoleNotificadaSinAsesor) {
+          // Sin asesor disponible: notificar a Nicole y liberar la cola
+          const nicoleNumero = process.env.WHATSAPP_NICOLE;
+          if (nicoleNumero) {
+            try {
+              const resumen = formatResumenPropietario(numero, estado.datos);
+              const msgNicole = `📋 CAPTACIÓN — Sin asesor de guardia disponible\n\n` + resumen;
+              await whatsapp.sendTemplate(nicoleNumero, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(msgNicole) });
+              console.log(`[scheduler] Nicole notificada por lead sin asesor: ${numero}`);
+            } catch (e) {
+              console.error('[scheduler] Error notificando Nicole (sin asesor):', e.message);
+            }
+          }
+          memory.set(numero, { followupPendiente: false, nicoleNotificadaSinAsesor: true });
         }
       }
     }
@@ -44,8 +59,9 @@ function init() {
       const diff = (ahora - new Date(estado.ultimoMensaje)) / 1000 / 60 / 60; // horas
 
       if (estado.flujo === 'propietario' && !estado.datos?.handoffListo) {
-        if (diff >= 48) {
+        if (diff >= 48 && !estado.followup48h) {
           await enviarFollowup(numero, estado, '48h_propietario');
+          memory.set(numero, { followup48h: true });
         } else if (diff >= 24 && !estado.followup24h) {
           await enviarFollowup(numero, estado, '24h_propietario');
           memory.set(numero, { followup24h: true });
@@ -53,10 +69,7 @@ function init() {
       }
 
       if (estado.flujo === 'asesor' && !estado.datos?.handoffListo) {
-        if (diff >= 168 && !estado.followup7d) { // 7 días
-          await enviarFollowup(numero, estado, '7d_asesor');
-          memory.set(numero, { followup7d: true });
-        } else if (diff >= 72 && !estado.followup72h) {
+        if (diff >= 72 && !estado.followup72h) {
           await enviarFollowup(numero, estado, '72h_asesor');
           memory.set(numero, { followup72h: true });
         } else if (diff >= 24 && !estado.followup24h) {
@@ -169,7 +182,7 @@ async function enviarResumenPropietario(asesor, numeroLead, datos) {
   if (nicoleNumero) {
     try {
       const msgNicole = `📋 CAPTACIÓN — Lead derivado a ${asesor.nombre}\n\n` + resumen;
-      await whatsapp.sendTemplate(nicoleNumero, 'notificacion_lead_nicole', 'es_EC', { '1': nicoleParam(msgNicole) });
+      await whatsapp.sendTemplate(nicoleNumero, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(msgNicole) });
       console.log(`[scheduler] Resumen propietario enviado a Nicole`);
     } catch (e) {
       console.error(`[scheduler] FALLO notificación a Nicole (propietario guardia):`, e.message);
