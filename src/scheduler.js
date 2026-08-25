@@ -59,10 +59,7 @@ function init() {
       const diff = (ahora - new Date(estado.ultimoMensaje)) / 1000 / 60 / 60; // horas
 
       if (estado.flujo === 'propietario' && !estado.datos?.handoffListo) {
-        if (diff >= 48 && !estado.followup48h) {
-          await enviarFollowup(numero, estado, '48h_propietario');
-          memory.set(numero, { followup48h: true });
-        } else if (diff >= 24 && !estado.followup24h) {
+        if (diff >= 24 && !estado.followup24h) {
           await enviarFollowup(numero, estado, '24h_propietario');
           memory.set(numero, { followup24h: true });
         }
