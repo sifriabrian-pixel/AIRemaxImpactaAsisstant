@@ -96,11 +96,6 @@ function init() {
         memory.set(numero, { followup30d_cobertura: true });
       }
 
-      // Reactivar asesores descalificados a los 30 días
-      if (estado.flujo === 'asesor' && estado.datos?.descalificado && diff >= 720 && !estado.followup30d) {
-        await enviarFollowup(numero, estado, '30d_asesor');
-        memory.set(numero, { followup30d: true });
-      }
     }
   });
 }
