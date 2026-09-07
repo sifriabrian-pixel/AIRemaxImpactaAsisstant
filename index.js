@@ -422,9 +422,6 @@ async function procesarMensaje(numeroLimpio, texto) {
   const consentEnEstaRespuesta = respuesta.includes('[CONSENT_GRANTED]');
   const textoLimpio = cleanResponse(respuesta);
 
-  // Guardar respuesta en historial
-  memory.addMessage(numeroLimpio, 'assistant', respuesta);
-
   // Marcar consentimiento si aplica
   if (consentEnEstaRespuesta) {
     memory.set(numeroLimpio, { consentimiento: true });
@@ -449,10 +446,15 @@ async function procesarMensaje(numeroLimpio, texto) {
   // Enviar respuesta al usuario
   if (textoLimpio) {
     try {
-      await whatsapp.sendMessage(numeroLimpio, textoLimpio);
+      const sendResult = await whatsapp.sendMessage(numeroLimpio, textoLimpio);
+      const wamid = sendResult?.messages?.[0]?.id || null;
+      memory.addMessage(numeroLimpio, 'assistant', respuesta, wamid);
     } catch (e) {
       console.error(`[wa] Error enviando mensaje a ${numeroLimpio}:`, e.message);
+      memory.addMessage(numeroLimpio, 'assistant', respuesta);
     }
+  } else {
+    memory.addMessage(numeroLimpio, 'assistant', respuesta);
   }
 
   // Procesar trigger principal (excluye CONSENT_GRANTED que ya fue manejado arriba)
@@ -506,7 +508,11 @@ function renderStatsPage(fechaDesde, fechaHasta) {
         <meta http-equiv="refresh" content="60">
         <meta charset="utf-8">
       </head>
-      <body style="background:#0b3d2e;min-height:100vh;margin:0;display:flex;justify-content:center;align-items:flex-start;padding:40px 16px;font-family:sans-serif;">
+      <body style="background:#0b3d2e;min-height:100vh;margin:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;padding:24px 16px;font-family:sans-serif;">
+        <div style="width:100%;max-width:600px;display:flex;gap:8px;margin-bottom:12px;">
+          <a href="/conversaciones" style="padding:6px 16px;border-radius:999px;background:transparent;color:white;text-decoration:none;border:2px solid rgba(255,255,255,0.4);font-size:13px;">Conversaciones</a>
+          <a href="/stats" style="padding:6px 16px;border-radius:999px;background:#0b3d2e;color:white;text-decoration:none;border:2px solid white;font-size:13px;font-weight:600;">Estadísticas</a>
+        </div>
         <div style="background:white;border-radius:20px;padding:32px;max-width:600px;width:100%;">
           <h2 style="margin:0;color:#0b3d2e;">🏠 REMAX Impacta — Valentina</h2>
           <p style="color:#666;margin-top:4px;">Estadísticas del agente desde ${desde}</p>
@@ -636,20 +642,13 @@ function motivoConsulta(estado) {
 }
 
 function estadoLead(estado) {
-  const horasInactivo = estado.ultimoMensaje
-    ? (Date.now() - new Date(estado.ultimoMensaje).getTime()) / 1000 / 60 / 60
-    : 0;
-
   if (estado.datos?.handoffListo) {
-    return { label: 'Calificado', bg: '#dcfce7', color: '#15803d' };
+    if (estado.flujo === 'asesor') {
+      return { label: 'Calificado', bg: '#dcfce7', color: '#15803d' };
+    }
+    return { label: 'Derivado', bg: '#e0f2fe', color: '#0369a1' };
   }
-  if (horasInactivo > 24) {
-    return { label: 'Sin respuesta', bg: '#f1f1f1', color: '#666' };
-  }
-  if (!estado.flujo || (estado.historial || []).length <= 2) {
-    return { label: 'Nuevo', bg: '#dbeafe', color: '#1d4ed8' };
-  }
-  return { label: 'Pendiente', bg: '#fef3c7', color: '#b45309' };
+  return { label: 'Nuevo', bg: '#dbeafe', color: '#1d4ed8' };
 }
 
 function renderConversacionesPage(numeroSeleccionado) {
@@ -697,11 +696,19 @@ function renderConversacionesPage(numeroSeleccionado) {
       const hora = m.ts
         ? new Date(m.ts).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guayaquil' })
         : '';
+      let tick = '';
+      if (!esUsuario) {
+        if (m.status === 'read') tick = '<span style="color:#53bdeb;font-size:11px;margin-left:3px;">✓✓</span>';
+        else if (m.status === 'delivered') tick = '<span style="color:rgba(255,255,255,0.5);font-size:11px;margin-left:3px;">✓✓</span>';
+        else if (m.wamid || m.status === 'sent') tick = '<span style="color:rgba(255,255,255,0.5);font-size:11px;margin-left:3px;">✓</span>';
+      }
       return `
         <div style="display:flex;justify-content:${esUsuario ? 'flex-start' : 'flex-end'};margin:8px 0;">
           <div style="max-width:70%;padding:10px 14px;border-radius:14px;background:${esUsuario ? '#f0f0f0' : '#0b3d2e'};color:${esUsuario ? '#222' : 'white'};">
             ${m.content.replace(/\n/g, '<br>')}
-            ${hora ? `<div style="font-size:10px;opacity:0.55;margin-top:5px;text-align:right;">${hora}</div>` : ''}
+            <div style="font-size:10px;opacity:0.55;margin-top:5px;text-align:right;display:flex;justify-content:flex-end;align-items:center;gap:2px;">
+              ${hora}${tick}
+            </div>
           </div>
         </div>`;
     }).join('');
@@ -728,7 +735,11 @@ function renderConversacionesPage(numeroSeleccionado) {
         <meta charset="utf-8">
       </head>
       <body style="background:#0b3d2e;min-height:100vh;margin:0;padding:24px;font-family:sans-serif;">
-        <div style="background:white;border-radius:16px;max-width:1000px;margin:0 auto;display:flex;height:calc(100vh - 48px);overflow:hidden;">
+        <div style="max-width:1000px;margin:0 auto 12px;display:flex;gap:8px;">
+          <a href="/conversaciones" style="padding:6px 16px;border-radius:999px;background:#0b3d2e;color:white;text-decoration:none;border:2px solid white;font-size:13px;font-weight:600;">Conversaciones</a>
+          <a href="/stats" style="padding:6px 16px;border-radius:999px;background:transparent;color:white;text-decoration:none;border:2px solid rgba(255,255,255,0.4);font-size:13px;">Estadísticas</a>
+        </div>
+        <div style="background:white;border-radius:16px;max-width:1000px;margin:0 auto;display:flex;height:calc(100vh - 84px);overflow:hidden;">
           <div style="width:320px;border-right:1px solid #eee;display:flex;flex-direction:column;">
             <div style="padding:16px;border-bottom:1px solid #eee;flex-shrink:0;">
               <h3 style="margin:0 0 12px;color:#0b3d2e;">Conversaciones</h3>
@@ -741,7 +752,7 @@ function renderConversacionesPage(numeroSeleccionado) {
                 <button class="filtro-estado" data-filtro="Todos" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:#0b3d2e;color:white;font-size:12px;cursor:pointer;">Todos</button>
                 <button class="filtro-estado" data-filtro="Nuevo" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:white;color:#333;font-size:12px;cursor:pointer;">Nuevos</button>
                 <button class="filtro-estado" data-filtro="Calificado" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:white;color:#333;font-size:12px;cursor:pointer;">Calificados</button>
-                <button class="filtro-estado" data-filtro="Pendiente" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:white;color:#333;font-size:12px;cursor:pointer;">Pendientes</button>
+                <button class="filtro-estado" data-filtro="Derivado" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:white;color:#333;font-size:12px;cursor:pointer;">Derivaciones</button>
               </div>
             </div>
             <div id="lista-conversaciones" style="overflow-y:auto;flex:1;">
@@ -880,6 +891,14 @@ function startServer() {
 
       for (const entry of payload.entry || []) {
         for (const change of entry.changes || []) {
+          // Actualizar estado de mensajes enviados (leído, entregado)
+          const statuses = change.value?.statuses || [];
+          for (const s of statuses) {
+            if (s.id && s.status) {
+              memory.updateMessageStatus(s.id, s.status);
+            }
+          }
+
           const mensajes = change.value?.messages || [];
           for (const msg of mensajes) {
             const numeroLimpio = msg.from;

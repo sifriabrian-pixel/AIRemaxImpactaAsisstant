@@ -52,15 +52,27 @@ function set(numero, estado) {
 
 const MAX_HISTORIAL = 40; // 20 turnos completos (user + assistant)
 
-function addMessage(numero, role, content) {
+function addMessage(numero, role, content, wamid = null) {
   const estado = get(numero);
-  estado.historial.push({ role, content, ts: new Date().toISOString() });
-  // Mantener solo los últimos MAX_HISTORIAL mensajes
+  const msg = { role, content, ts: new Date().toISOString() };
+  if (wamid) msg.wamid = wamid;
+  estado.historial.push(msg);
   if (estado.historial.length > MAX_HISTORIAL) {
     estado.historial = estado.historial.slice(-MAX_HISTORIAL);
   }
   estado.ultimoMensaje = new Date().toISOString();
   save();
+}
+
+function updateMessageStatus(wamid, status) {
+  for (const estado of Object.values(conversations)) {
+    const msg = (estado.historial || []).find(m => m.wamid === wamid);
+    if (msg) {
+      msg.status = status;
+      save();
+      return;
+    }
+  }
 }
 
 function reset(numero) {
@@ -82,4 +94,4 @@ function getAll() {
 
 load();
 
-module.exports = { get, set, addMessage, reset, getAll };
+module.exports = { get, set, addMessage, updateMessageStatus, reset, getAll };
