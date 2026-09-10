@@ -733,7 +733,7 @@ function renderPrivacyPage() {
         <meta name="viewport" content="width=device-width, initial-scale=1">
       </head>
       <body style="font-family:sans-serif;max-width:720px;margin:40px auto;padding:0 20px;line-height:1.6;color:#222;">
-        <h1 style="color:#0b3d2e;">Política de Privacidad</h1>
+        <h1 style="color:#0D1526;">Política de Privacidad</h1>
         <p><strong>RE/MAX Impacta</strong></p>
         <p>Última actualización: ${new Date().toLocaleDateString('es-EC')}</p>
 
