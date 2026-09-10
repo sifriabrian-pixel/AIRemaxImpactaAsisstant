@@ -11,6 +11,8 @@ const { getSesionConfig, getIbarraSesionConfig, getCuposUsados } = require('./sr
 
 const NUMEROS_AUTORIZADOS = (process.env.NUMEROS_AUTORIZADOS || '').split(',').map(n => n.trim()).filter(Boolean);
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
+const CLIENT_NAME = process.env.CLIENT_NAME || 'RE/MAX Impacta';
+const AGENT_NAME = process.env.AGENT_NAME || 'Valentina';
 
 const TRIGGERS = [
   'HANDOFF_PROPIETARIO',
@@ -525,7 +527,7 @@ function renderGraficoTendencia(serie) {
   const maxCantidad = Math.max(1, ...serie.map((d) => d.cantidad));
   const barras = serie.map((d) => {
     const pct = d.cantidad > 0 ? Math.max(Math.round((d.cantidad / maxCantidad) * 100), 4) : 0;
-    return `<div title="${d.fecha}: ${d.cantidad} lead${d.cantidad === 1 ? '' : 's'}" style="flex:1;background:#0b3d2e;border-radius:3px 3px 0 0;height:${pct}%;"></div>`;
+    return `<div title="${d.fecha}: ${d.cantidad} lead${d.cantidad === 1 ? '' : 's'}" style="flex:1;background:#2762EA;border-radius:3px 3px 0 0;height:${pct}%;"></div>`;
   }).join('');
   const labels = serie.map((d) => `<div style="flex:1;text-align:center;font-size:9px;color:#999;">${diaCorto(d.fecha)}</div>`).join('');
   return `
@@ -544,7 +546,7 @@ function renderComparacionPeriodo(cp) {
     <div style="background:#f3f4f6;border-radius:12px;padding:16px 20px;margin-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
       <div>
         <div style="font-size:12px;color:#666;">Últimos 7 días</div>
-        <div style="font-size:24px;font-weight:800;color:#0b3d2e;">${cp.actual} leads</div>
+        <div style="font-size:24px;font-weight:800;color:#0D1526;">${cp.actual} leads</div>
       </div>
       <div style="text-align:right;">
         <div style="font-size:12px;color:#666;">vs. 7 días anteriores (${cp.anterior})</div>
@@ -561,7 +563,7 @@ function renderStatsPage(fechaDesde, fechaHasta) {
   const box = (valor, label, categoria) => {
     const contenido = `
       <div style="background:#f3f4f6;border-radius:12px;padding:24px;text-align:center;">
-        <div style="font-size:32px;font-weight:800;color:#0b3d2e;">${valor}</div>
+        <div style="font-size:32px;font-weight:800;color:#0D1526;">${valor}</div>
         <div style="color:#555;margin-top:4px;">${label}</div>
       </div>`;
     if (!categoria) return contenido;
@@ -576,7 +578,7 @@ function renderStatsPage(fechaDesde, fechaHasta) {
     arrendatario: 'Arrendatarios',
   };
   const filasFlujo = Object.entries(s.porFlujo)
-    .map(([flujo, cantidad]) => `<tr><td style="padding:4px 12px;"><a href="${statsDetalleHref('flujo_' + flujo, fechaDesde, fechaHasta)}" style="color:#0b3d2e;text-decoration:none;">${flujoLabels[flujo] || flujo}</a></td><td style="padding:4px 12px;text-align:right;font-weight:700;">${cantidad}</td></tr>`)
+    .map(([flujo, cantidad]) => `<tr><td style="padding:4px 12px;"><a href="${statsDetalleHref('flujo_' + flujo, fechaDesde, fechaHasta)}" style="color:#2762EA;text-decoration:none;">${flujoLabels[flujo] || flujo}</a></td><td style="padding:4px 12px;text-align:right;font-weight:700;">${cantidad}</td></tr>`)
     .join('');
 
   const CIUDAD_ORDEN = ['Quito', 'Valles', 'Imbabura', 'Fuera de cobertura', 'Sin especificar'];
@@ -586,9 +588,9 @@ function renderStatsPage(fechaDesde, fechaHasta) {
 
   const filasOperacion = [
     ['Venta', s.desgloseOperacion.venta],
-    ['Arriendo', s.desgloseOperacion.arriendo],
-    ['Compra', s.desgloseOperacion.compra],
     ['Alquiler', s.desgloseOperacion.alquiler],
+    ['Captación', s.desgloseOperacion.captacion],
+    ['Asesores', s.desgloseOperacion.asesores],
   ].map(([label, cantidad]) => `<tr><td style="padding:4px 12px;">${label}</td><td style="padding:4px 12px;text-align:right;font-weight:700;">${cantidad}</td></tr>`).join('');
 
   return `
@@ -596,20 +598,25 @@ function renderStatsPage(fechaDesde, fechaHasta) {
       <head>
         <meta http-equiv="refresh" content="60">
         <meta charset="utf-8">
+        <title>Sifer CRM</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Poppins:wght@400;500&display=swap" rel="stylesheet">
+        <style>body{font-family:'Poppins',sans-serif;}h1,h2,h3{font-family:'Montserrat',sans-serif;}</style>
       </head>
-      <body style="background:#0b3d2e;min-height:100vh;margin:0;display:flex;justify-content:center;align-items:flex-start;padding:40px 16px;font-family:sans-serif;">
+      <body style="background:#0D1526;min-height:100vh;margin:0;display:flex;justify-content:center;align-items:flex-start;padding:40px 16px;">
         <div style="background:white;border-radius:20px;padding:32px;max-width:680px;width:100%;">
-          <a href="/conversaciones" style="color:#0b3d2e;font-size:13px;font-weight:600;text-decoration:none;">← Volver al CRM</a>
-          <h2 style="margin:8px 0 0;color:#0b3d2e;">🏠 REMAX Impacta — Valentina</h2>
-          <p style="color:#666;margin-top:4px;">Estadísticas del agente desde ${desde}</p>
+          <a href="/conversaciones" style="color:#2762EA;font-size:13px;font-weight:600;text-decoration:none;">← Volver al CRM</a>
+          <h2 style="margin:8px 0 0;color:#0D1526;">Sifer CRM</h2>
+          <p style="color:#666;margin-top:2px;font-size:13px;">${CLIENT_NAME} · ${AGENT_NAME} · desde ${desde}</p>
 
           <form method="GET" action="/stats" style="margin:16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <label style="font-size:13px;color:#555;">Desde</label>
             <input type="date" name="desde" value="${fechaDesde || ''}" style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;">
             <label style="font-size:13px;color:#555;">Hasta</label>
             <input type="date" name="hasta" value="${fechaHasta || ''}" style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;">
-            <button type="submit" style="padding:6px 14px;border-radius:8px;border:none;background:#0b3d2e;color:white;cursor:pointer;">Filtrar</button>
-            <a href="/stats" style="color:#0b3d2e;text-decoration:underline;">Ver todo</a>
+            <button type="submit" style="padding:6px 14px;border-radius:8px;border:none;background:#2762EA;color:white;cursor:pointer;">Filtrar</button>
+            <a href="/stats" style="color:#2762EA;text-decoration:underline;">Ver todo</a>
           </form>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;">
@@ -627,21 +634,21 @@ function renderStatsPage(fechaDesde, fechaHasta) {
 
           ${renderComparacionPeriodo(s.comparacionPeriodo)}
 
-          <h3 style="color:#0b3d2e;margin-top:28px;margin-bottom:12px;">Tendencia — últimos 14 días</h3>
+          <h3 style="color:#0D1526;margin-top:28px;margin-bottom:12px;">Tendencia — últimos 14 días</h3>
           ${renderGraficoTendencia(s.serieTendencia)}
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:28px;">
             <div>
-              <h3 style="color:#0b3d2e;margin:0 0 8px;">Por zona</h3>
+              <h3 style="color:#0D1526;margin:0 0 8px;">Por zona</h3>
               <table style="width:100%;border-collapse:collapse;">${filasCiudad}</table>
             </div>
             <div>
-              <h3 style="color:#0b3d2e;margin:0 0 8px;">Por operación</h3>
+              <h3 style="color:#0D1526;margin:0 0 8px;">Por operación</h3>
               <table style="width:100%;border-collapse:collapse;">${filasOperacion}</table>
             </div>
           </div>
 
-          <h3 style="color:#0b3d2e;margin-top:28px;">Desglose por tipo de lead</h3>
+          <h3 style="color:#0D1526;margin-top:28px;">Desglose por tipo de lead</h3>
           <table style="width:100%;border-collapse:collapse;">${filasFlujo}</table>
 
           <hr style="margin-top:24px;border:none;border-top:1px solid #eee;">
@@ -668,7 +675,7 @@ function renderDetalleCategoria(categoria, fechaDesde, fechaHasta) {
     return `
       <tr>
         <td style="padding:10px 12px;border-bottom:1px solid #eee;">
-          <a href="/conversaciones?numero=${encodeURIComponent(e.numero)}&columna=todos" style="color:#0b3d2e;text-decoration:none;font-weight:700;font-size:14px;">${nombre}</a>
+          <a href="/conversaciones?numero=${encodeURIComponent(e.numero)}&columna=todos" style="color:#2762EA;text-decoration:none;font-weight:700;font-size:14px;">${nombre}</a>
           <div style="font-size:11px;color:#999;margin-top:2px;">${e.numero} · ${detalle}</div>
         </td>
         <td style="padding:10px 12px;border-bottom:1px solid #eee;text-align:right;color:#666;font-size:12px;white-space:nowrap;">${fecha}</td>
@@ -687,11 +694,16 @@ function renderDetalleCategoria(categoria, fechaDesde, fechaHasta) {
     <html>
       <head>
         <meta charset="utf-8">
+        <title>Sifer CRM</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Poppins:wght@400;500&display=swap" rel="stylesheet">
+        <style>body{font-family:'Poppins',sans-serif;}h1,h2,h3{font-family:'Montserrat',sans-serif;}</style>
       </head>
-      <body style="background:#0b3d2e;min-height:100vh;margin:0;display:flex;justify-content:center;align-items:flex-start;padding:40px 16px;font-family:sans-serif;">
+      <body style="background:#0D1526;min-height:100vh;margin:0;display:flex;justify-content:center;align-items:flex-start;padding:40px 16px;">
         <div style="background:white;border-radius:20px;padding:32px;max-width:600px;width:100%;">
-          <a href="${backHref}" style="color:#0b3d2e;font-size:13px;font-weight:600;text-decoration:none;">← Volver a Stats</a>
-          <h2 style="margin:8px 0 0;color:#0b3d2e;">${titulo}</h2>
+          <a href="${backHref}" style="color:#2762EA;font-size:13px;font-weight:600;text-decoration:none;">← Volver a Stats</a>
+          <h2 style="margin:8px 0 0;color:#0D1526;">${titulo}</h2>
           <p style="color:#666;margin-top:4px;">${eventos.length} lead${eventos.length === 1 ? '' : 's'}</p>
 
           <table style="width:100%;border-collapse:collapse;margin-top:12px;">
@@ -764,7 +776,7 @@ function checkAuth(req, res) {
 
   if (pass === password) return true;
 
-  res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="RE/MAX Impacta"' });
+  res.writeHead(401, { 'WWW-Authenticate': `Basic realm="${CLIENT_NAME}"` });
   res.end('Acceso restringido');
   return false;
 }
@@ -850,15 +862,15 @@ const COLUMNAS = [
   { key: 'calificados', label: 'Calificados', color: '#b45309', bg: '#fef3c7' },
 ];
 
+// Categorías del filtro = los 4 flujos reales de Impacta, en términos de
+// negocio: un propietario es una "captación" (venda o arriende, da igual acá),
+// un comprador genera una "venta" y un arrendatario un "alquiler".
 function operacionFiltro(estado) {
-  const op = (estado.datos?.operacion || '').toLowerCase();
   switch (estado.flujo) {
-    case 'propietario':
-      if (op.includes('arriendo')) return 'arriendo';
-      if (op.includes('venta')) return 'venta';
-      return '';
-    case 'comprador': return 'compra';
+    case 'propietario': return 'captacion';
+    case 'comprador': return 'venta';
     case 'arrendatario': return 'alquiler';
+    case 'asesor': return 'asesores';
     default: return '';
   }
 }
@@ -900,13 +912,13 @@ function renderTarjeta(numero, estado, numeroSeleccionado, miColumna) {
        data-operacion="${operacionFiltro(estado)}"
        data-sinrespuesta="${sinResp ? '1' : '0'}"
        style="text-decoration:none;color:inherit;display:block;margin-bottom:8px;">
-      <div style="background:white;border:1px solid ${activo ? '#0b3d2e' : '#e5e7eb'};${activo ? 'box-shadow:0 0 0 2px #0b3d2e33;' : ''}border-radius:10px;padding:10px 12px;">
+      <div style="background:white;border:1px solid ${activo ? '#2762EA' : '#e5e7eb'};${activo ? 'box-shadow:0 0 0 2px #2762EA33;' : ''}border-radius:10px;padding:10px 12px;">
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
           <div style="font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nombre}</div>
           <div style="font-size:11px;color:#999;flex-shrink:0;">${fecha}</div>
         </div>
         <div style="font-size:12px;color:#666;margin-top:2px;">${motivo}</div>
-        ${asignado && asignado.nombre ? `<div style="font-size:11px;color:#0b3d2e;margin-top:4px;">👤 ${asignado.nombre}</div>` : ''}
+        ${asignado && asignado.nombre ? `<div style="font-size:11px;color:#2762EA;margin-top:4px;">👤 ${asignado.nombre}</div>` : ''}
         ${sinResp ? `<span style="display:inline-block;margin-top:6px;background:#f1f1f1;color:#666;font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px;">Sin respuesta</span>` : ''}
         ${prioridadBadge(estado)}
         ${notaTexto ? `<div style="font-size:11px;color:#555;margin-top:4px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📝 ${notaTexto}</div>` : ''}
@@ -933,7 +945,7 @@ function renderBurbujas(historial) {
     const icono = !esUsuario ? iconoEstadoEnvio(m.estadoEnvio) : '';
     return `
       <div style="display:flex;justify-content:${esUsuario ? 'flex-start' : 'flex-end'};margin:6px 0;">
-        <div style="max-width:85%;padding:8px 11px;border-radius:12px;font-size:12px;background:${esUsuario ? '#f0f0f0' : '#0b3d2e'};color:${esUsuario ? '#222' : 'white'};">
+        <div style="max-width:85%;padding:8px 11px;border-radius:12px;font-size:12px;background:${esUsuario ? '#f0f0f0' : '#2762EA'};color:${esUsuario ? '#222' : 'white'};">
           ${m.content.replace(/\n/g, '<br>')}
           ${hora || icono ? `<div style="font-size:9px;opacity:0.85;margin-top:4px;text-align:right;">${hora}${icono ? ' ' + icono : ''}</div>` : ''}
         </div>
@@ -978,12 +990,12 @@ function renderChatEnColumna(numero, estado, nicoleNumero, miColumna) {
         <label style="font-size:11px;font-weight:700;color:#555;">📝 Nota interna</label>
         <textarea name="nota" rows="2" placeholder="Ej: en seguimiento, no contesta..."
           style="width:100%;box-sizing:border-box;font-size:12px;padding:6px;border-radius:6px;border:1px solid #ddd;margin-top:4px;resize:vertical;font-family:inherit;">${estado.nota || ''}</textarea>
-        <button type="submit" style="margin-top:6px;font-size:11px;padding:5px 12px;border-radius:6px;border:none;background:#0b3d2e;color:white;cursor:pointer;">Guardar nota</button>
+        <button type="submit" style="margin-top:6px;font-size:11px;padding:5px 12px;border-radius:6px;border:none;background:#2762EA;color:white;cursor:pointer;">Guardar nota</button>
       </form>
     </div>`;
 
   return `
-    <a href="/conversaciones" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;color:#0b3d2e;font-size:12px;font-weight:600;padding:8px 10px;">
+    <a href="/conversaciones" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;color:#2762EA;font-size:12px;font-weight:600;padding:8px 10px;">
       ← Volver
     </a>
     <div style="padding:0 12px 10px;">
@@ -1020,7 +1032,7 @@ function renderTarjetaInterna(numero, estado, numeroSeleccionado, miColumna) {
        data-nombre="${nombre.toLowerCase()}"
        data-numero="${numero}"
        style="text-decoration:none;color:inherit;display:block;margin-bottom:8px;">
-      <div style="background:white;border:1px solid ${activo ? '#0b3d2e' : '#e5e7eb'};${activo ? 'box-shadow:0 0 0 2px #0b3d2e33;' : ''}border-radius:10px;padding:10px 12px;">
+      <div style="background:white;border:1px solid ${activo ? '#2762EA' : '#e5e7eb'};${activo ? 'box-shadow:0 0 0 2px #2762EA33;' : ''}border-radius:10px;padding:10px 12px;">
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
           <div style="font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nombre}</div>
           <div style="font-size:11px;color:#999;flex-shrink:0;">${fecha}</div>
@@ -1060,8 +1072,8 @@ function renderConversacionesPage(numeroSeleccionado, columnaSeleccionada) {
   const columnaTodosHtml = `
     <div class="columna-kanban" style="min-width:260px;flex:1;display:flex;flex-direction:column;background:#f8f9fa;border-radius:12px;overflow:hidden;">
       <div style="padding:12px 14px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-weight:700;color:#0b3d2e;">Todos</span>
-        <span style="background:#0b3d2e;color:white;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;">${leads.length}</span>
+        <span style="font-weight:700;color:#0D1526;">Todos</span>
+        <span style="background:#2762EA;color:white;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;">${leads.length}</span>
       </div>
       <div style="overflow-y:auto;max-height:65vh;">
         ${renderCuerpoColumna(leads, numeroSeleccionado, columnaSeleccionada, 'todos', nicoleNumero, renderTarjeta, 'Sin leads todavía.')}
@@ -1097,15 +1109,23 @@ function renderConversacionesPage(numeroSeleccionado, columnaSeleccionada) {
     <html>
       <head>
         <meta charset="utf-8">
+        <title>Sifer CRM</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Poppins:wght@400;500&display=swap" rel="stylesheet">
+        <style>body{font-family:'Poppins',sans-serif;}h1,h2,h3{font-family:'Montserrat',sans-serif;}</style>
       </head>
-      <body style="background:#0b3d2e;min-height:100vh;margin:0;padding:24px;font-family:sans-serif;">
+      <body style="background:#0D1526;min-height:100vh;margin:0;padding:24px;">
         <div style="max-width:1300px;margin:0 auto;">
           <div style="background:white;border-radius:16px;padding:20px;">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
               <div style="display:flex;align-items:center;gap:16px;">
-                <h2 style="margin:0;color:#0b3d2e;">🏠 CRM de Valentina</h2>
-                <a href="/stats" style="color:#0b3d2e;font-size:13px;font-weight:600;text-decoration:none;background:#eef6f2;padding:6px 12px;border-radius:8px;">📊 Stats</a>
-                <a href="/conversaciones/exportar.csv" style="color:#0b3d2e;font-size:13px;font-weight:600;text-decoration:none;background:#eef6f2;padding:6px 12px;border-radius:8px;">⬇️ Exportar CSV</a>
+                <div>
+                  <h2 style="margin:0;color:#0D1526;">Sifer CRM</h2>
+                  <div style="font-size:12px;color:#666;margin-top:2px;">${CLIENT_NAME} · ${AGENT_NAME}</div>
+                </div>
+                <a href="/stats" style="color:#2762EA;font-size:13px;font-weight:600;text-decoration:none;background:#EEF2FD;padding:6px 12px;border-radius:8px;">📊 Stats</a>
+                <a href="/conversaciones/exportar.csv" style="color:#2762EA;font-size:13px;font-weight:600;text-decoration:none;background:#EEF2FD;padding:6px 12px;border-radius:8px;">⬇️ Exportar CSV</a>
               </div>
               <div style="position:relative;width:260px;">
                 <input id="buscador" type="text" placeholder="Buscar nombre o número..."
@@ -1118,11 +1138,11 @@ function renderConversacionesPage(numeroSeleccionado, columnaSeleccionada) {
               <input id="filtroSector" type="text" placeholder="Filtrar por sector..."
                 style="padding:6px 10px;border-radius:8px;border:1px solid #ddd;font-size:12px;width:160px;">
               <select id="filtroOperacion" style="padding:6px 10px;border-radius:8px;border:1px solid #ddd;font-size:12px;">
-                <option value="">Todas las operaciones</option>
+                <option value="">Todas las categorías</option>
                 <option value="venta">Venta</option>
-                <option value="arriendo">Arriendo</option>
-                <option value="compra">Compra</option>
                 <option value="alquiler">Alquiler</option>
+                <option value="captacion">Captación</option>
+                <option value="asesores">Asesores</option>
               </select>
               <label style="font-size:12px;color:#555;display:flex;align-items:center;gap:4px;cursor:pointer;">
                 <input id="filtroSinRespuesta" type="checkbox"> Sin respuesta
@@ -1219,7 +1239,7 @@ function startServer() {
       if (!checkAuth(req, res)) return;
       res.writeHead(200, {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': 'attachment; filename="leads_valentina.csv"',
+        'Content-Disposition': `attachment; filename="leads_${AGENT_NAME.toLowerCase().replace(/\s+/g, '_')}.csv"`,
       });
       res.end('﻿' + generarCSVLeads());
       return;
@@ -1328,7 +1348,7 @@ function startServer() {
 
     if (parsedUrl.pathname === '/') {
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('Valentina está activa ✅');
+      res.end(`${AGENT_NAME} está activa ✅`);
       return;
     }
 

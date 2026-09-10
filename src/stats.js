@@ -152,21 +152,6 @@ function desgloseGeografico(fechaDesde, fechaHasta) {
   return conteo;
 }
 
-function desgloseOperacionPropietario(fechaDesde, fechaHasta) {
-  const todos = memory.getAll();
-  const filtrados = filtrarPorRango(events, fechaDesde, fechaHasta);
-  const numeros = new Set(filtrados.filter(e => e.tipo === 'flujo_propietario').map(e => e.numero));
-
-  let venta = 0, arriendo = 0, sinEspecificar = 0;
-  for (const numero of numeros) {
-    const op = (todos[numero]?.datos?.operacion || '').toLowerCase();
-    if (op.includes('arriendo')) arriendo++;
-    else if (op.includes('venta')) venta++;
-    else sinEspecificar++;
-  }
-  return { venta, arriendo, sinEspecificar };
-}
-
 function getStats(fechaDesde, fechaHasta) {
   const filtrados = filtrarPorRango(events, fechaDesde, fechaHasta);
 
@@ -188,8 +173,6 @@ function getStats(fechaDesde, fechaHasta) {
   const reactivados = unicos(porTipo('reactivado'));
   const tasaReactivacion = conSeguimiento > 0 ? Math.round((reactivados / conSeguimiento) * 100) : null;
 
-  const operacionPropietario = desgloseOperacionPropietario(fechaDesde, fechaHasta);
-
   return {
     leadsAtendidos,
     fichasEnviadas: fichas.length,
@@ -205,11 +188,14 @@ function getStats(fechaDesde, fechaHasta) {
     serieTendencia: serieDiaria(14),
     comparacionPeriodo: compararPeriodos(),
     desgloseCiudad: desgloseGeografico(fechaDesde, fechaHasta),
+    // Categorías de negocio reales de Impacta (no venta/arriendo/compra/
+    // alquiler como en Diamond): un propietario es una captación, un
+    // comprador genera una venta, un arrendatario un alquiler.
     desgloseOperacion: {
-      venta: operacionPropietario.venta,
-      arriendo: operacionPropietario.arriendo,
-      compra: porFlujo.comprador,
+      captacion: porFlujo.propietario,
+      venta: porFlujo.comprador,
       alquiler: porFlujo.arrendatario,
+      asesores: porFlujo.asesor,
     },
   };
 }
