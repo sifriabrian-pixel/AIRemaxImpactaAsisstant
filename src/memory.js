@@ -80,6 +80,30 @@ function getAll() {
   return conversations;
 }
 
+function setUltimoEstadoEnvio(numero, estado, waMessageId) {
+  const conv = get(numero);
+  for (let i = conv.historial.length - 1; i >= 0; i--) {
+    if (conv.historial[i].role === 'assistant') {
+      conv.historial[i].estadoEnvio = estado;
+      if (waMessageId) conv.historial[i].wamid = waMessageId;
+      break;
+    }
+  }
+  save();
+}
+
+function setMessageStatus(wamid, estado) {
+  for (const conv of Object.values(conversations)) {
+    for (const m of conv.historial || []) {
+      if (m.wamid === wamid) {
+        m.estadoEnvio = estado;
+        save();
+        return;
+      }
+    }
+  }
+}
+
 load();
 
-module.exports = { get, set, addMessage, reset, getAll };
+module.exports = { get, set, addMessage, reset, getAll, setUltimoEstadoEnvio, setMessageStatus };

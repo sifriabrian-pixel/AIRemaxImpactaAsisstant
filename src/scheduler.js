@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const memory = require('./memory');
 const whatsapp = require('./whatsapp');
+const stats = require('./stats');
 const { getAsesorDeGuardia } = require('./guardias');
 
 function nicoleParam(texto) {
@@ -149,6 +150,9 @@ async function enviarFollowup(numero, estado, tipo) {
       await plantillas[tipo]();
       memory.addMessage(numero, 'assistant', textosPorTipo[tipo] || `[Seguimiento automático: ${tipo}]`);
       console.log(`[scheduler] Plantilla ${tipo} enviada a ${numero}`);
+      // Registrar seguimiento para calcular tasa de reactivación
+      if (tipo === '24h_propietario' || tipo === '24h_asesor') stats.logEvent('seguimiento_24h', numero);
+      else if (tipo === '72h_asesor') stats.logEvent('seguimiento_72h', numero);
     } catch (e) {
       console.error(`[scheduler] Error enviando plantilla ${tipo} a ${numero}:`, e.message);
     }

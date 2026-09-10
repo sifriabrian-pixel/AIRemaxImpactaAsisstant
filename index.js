@@ -382,6 +382,12 @@ async function procesarMensaje(numeroLimpio, texto) {
     stats.logEvent('lead_atendido', numeroLimpio);
   }
 
+  // Reactivación: el lead respondió después de un follow-up automático
+  if ((estado.followup24h || estado.followup72h) && !estado.reactivadoRegistrado && !estado.datos?.handoffListo) {
+    stats.logEvent('reactivado', numeroLimpio);
+    memory.set(numeroLimpio, { reactivadoRegistrado: true });
+  }
+
   // Agregar mensaje al historial
   memory.addMessage(numeroLimpio, 'user', texto);
 
@@ -449,9 +455,12 @@ async function procesarMensaje(numeroLimpio, texto) {
   // Enviar respuesta al usuario
   if (textoLimpio) {
     try {
-      await whatsapp.sendMessage(numeroLimpio, textoLimpio);
+      const respuestaWA = await whatsapp.sendMessage(numeroLimpio, textoLimpio);
+      const waMessageId = respuestaWA?.messages?.[0]?.id || null;
+      memory.setUltimoEstadoEnvio(numeroLimpio, 'enviado', waMessageId);
     } catch (e) {
       console.error(`[wa] Error enviando mensaje a ${numeroLimpio}:`, e.message);
+      memory.setUltimoEstadoEnvio(numeroLimpio, 'fallido');
     }
   }
 
@@ -479,16 +488,86 @@ async function procesarMensaje(numeroLimpio, texto) {
   }
 }
 
+const HANDOFF_LABELS = {
+  handoff_propietario: 'Propietario',
+  handoff_imbabura: 'Propietario Imbabura',
+  handoff_asesor: 'Prospecto asesor',
+  handoff_comprador: 'Comprador',
+  handoff_arrendatario: 'Arrendatario',
+  handoff_general: 'Consulta general',
+};
+
+const CATEGORIA_LABELS = {
+  atendidos: 'Leads atendidos',
+  fichas: 'Fichas enviadas',
+  derivados: 'Leads derivados',
+  fuera_horario: 'Fuera de horario',
+  reactivados: 'Leads reactivados',
+  flujo_propietario: 'Propietarios',
+  flujo_asesor: 'Prospectos asesor',
+  flujo_comprador: 'Compradores',
+  flujo_arrendatario: 'Arrendatarios',
+};
+
+function statsDetalleHref(categoria, fechaDesde, fechaHasta) {
+  let href = `/stats/detalle?tipo=${categoria}`;
+  if (fechaDesde) href += `&desde=${fechaDesde}`;
+  if (fechaHasta) href += `&hasta=${fechaHasta}`;
+  return href;
+}
+
+function diaCorto(fechaStr) {
+  const [y, m, d] = fechaStr.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('es-EC', { weekday: 'short' }).replace('.', '');
+}
+
+function renderGraficoTendencia(serie) {
+  const maxCantidad = Math.max(1, ...serie.map((d) => d.cantidad));
+  const barras = serie.map((d) => {
+    const pct = d.cantidad > 0 ? Math.max(Math.round((d.cantidad / maxCantidad) * 100), 4) : 0;
+    return `<div title="${d.fecha}: ${d.cantidad} lead${d.cantidad === 1 ? '' : 's'}" style="flex:1;background:#0b3d2e;border-radius:3px 3px 0 0;height:${pct}%;"></div>`;
+  }).join('');
+  const labels = serie.map((d) => `<div style="flex:1;text-align:center;font-size:9px;color:#999;">${diaCorto(d.fecha)}</div>`).join('');
+  return `
+    <div style="display:flex;align-items:flex-end;gap:3px;height:90px;border-bottom:1px solid #eee;">${barras}</div>
+    <div style="display:flex;gap:3px;margin-top:4px;">${labels}</div>`;
+}
+
+function renderComparacionPeriodo(cp) {
+  let flecha = '→', color = '#666', texto = 'sin datos';
+  if (cp.cambioPorcentual !== null) {
+    texto = `${Math.abs(cp.cambioPorcentual)}%`;
+    if (cp.cambioPorcentual > 0) { flecha = '↑'; color = '#15803d'; }
+    else if (cp.cambioPorcentual < 0) { flecha = '↓'; color = '#b91c1c'; }
+  }
+  return `
+    <div style="background:#f3f4f6;border-radius:12px;padding:16px 20px;margin-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="font-size:12px;color:#666;">Últimos 7 días</div>
+        <div style="font-size:24px;font-weight:800;color:#0b3d2e;">${cp.actual} leads</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:12px;color:#666;">vs. 7 días anteriores (${cp.anterior})</div>
+        <div style="font-size:20px;font-weight:800;color:${color};">${flecha} ${texto}</div>
+      </div>
+    </div>`;
+}
+
 function renderStatsPage(fechaDesde, fechaHasta) {
   const s = stats.getStats(fechaDesde, fechaHasta);
   const desde = new Date(s.instaladoDesde).toLocaleDateString('es-EC');
   const actualizado = new Date().toLocaleString('es-EC');
 
-  const box = (valor, label) => `
-    <div style="background:#f3f4f6;border-radius:12px;padding:24px;text-align:center;">
-      <div style="font-size:32px;font-weight:800;color:#0b3d2e;">${valor}</div>
-      <div style="color:#555;margin-top:4px;">${label}</div>
-    </div>`;
+  const box = (valor, label, categoria) => {
+    const contenido = `
+      <div style="background:#f3f4f6;border-radius:12px;padding:24px;text-align:center;">
+        <div style="font-size:32px;font-weight:800;color:#0b3d2e;">${valor}</div>
+        <div style="color:#555;margin-top:4px;">${label}</div>
+      </div>`;
+    if (!categoria) return contenido;
+    return `<a href="${statsDetalleHref(categoria, fechaDesde, fechaHasta)}" style="text-decoration:none;display:block;">${contenido}</a>`;
+  };
+  const boxPct = (valor, label, categoria) => box(valor === null ? '–' : `${valor}%`, label, categoria);
 
   const flujoLabels = {
     propietario: 'Propietarios',
@@ -497,8 +576,20 @@ function renderStatsPage(fechaDesde, fechaHasta) {
     arrendatario: 'Arrendatarios',
   };
   const filasFlujo = Object.entries(s.porFlujo)
-    .map(([flujo, cantidad]) => `<tr><td style="padding:4px 12px;">${flujoLabels[flujo] || flujo}</td><td style="padding:4px 12px;text-align:right;font-weight:700;">${cantidad}</td></tr>`)
+    .map(([flujo, cantidad]) => `<tr><td style="padding:4px 12px;"><a href="${statsDetalleHref('flujo_' + flujo, fechaDesde, fechaHasta)}" style="color:#0b3d2e;text-decoration:none;">${flujoLabels[flujo] || flujo}</a></td><td style="padding:4px 12px;text-align:right;font-weight:700;">${cantidad}</td></tr>`)
     .join('');
+
+  const CIUDAD_ORDEN = ['Quito', 'Valles', 'Imbabura', 'Fuera de cobertura', 'Sin especificar'];
+  const filasCiudad = CIUDAD_ORDEN
+    .map((c) => `<tr><td style="padding:4px 12px;">${c}</td><td style="padding:4px 12px;text-align:right;font-weight:700;">${s.desgloseCiudad[c] || 0}</td></tr>`)
+    .join('');
+
+  const filasOperacion = [
+    ['Venta', s.desgloseOperacion.venta],
+    ['Arriendo', s.desgloseOperacion.arriendo],
+    ['Compra', s.desgloseOperacion.compra],
+    ['Alquiler', s.desgloseOperacion.alquiler],
+  ].map(([label, cantidad]) => `<tr><td style="padding:4px 12px;">${label}</td><td style="padding:4px 12px;text-align:right;font-weight:700;">${cantidad}</td></tr>`).join('');
 
   return `
     <html>
@@ -507,8 +598,9 @@ function renderStatsPage(fechaDesde, fechaHasta) {
         <meta charset="utf-8">
       </head>
       <body style="background:#0b3d2e;min-height:100vh;margin:0;display:flex;justify-content:center;align-items:flex-start;padding:40px 16px;font-family:sans-serif;">
-        <div style="background:white;border-radius:20px;padding:32px;max-width:600px;width:100%;">
-          <h2 style="margin:0;color:#0b3d2e;">🏠 REMAX Impacta — Valentina</h2>
+        <div style="background:white;border-radius:20px;padding:32px;max-width:680px;width:100%;">
+          <a href="/conversaciones" style="color:#0b3d2e;font-size:13px;font-weight:600;text-decoration:none;">← Volver al CRM</a>
+          <h2 style="margin:8px 0 0;color:#0b3d2e;">🏠 REMAX Impacta — Valentina</h2>
           <p style="color:#666;margin-top:4px;">Estadísticas del agente desde ${desde}</p>
 
           <form method="GET" action="/stats" style="margin:16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -521,10 +613,32 @@ function renderStatsPage(fechaDesde, fechaHasta) {
           </form>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;">
-            ${box(s.leadsAtendidos, 'Leads atendidos')}
-            ${box(s.fichasEnviadas, 'Fichas enviadas')}
-            ${box(s.leadsDerivados, 'Leads derivados')}
-            ${box(s.fueraHorario, 'Fuera de horario')}
+            ${box(s.leadsAtendidos, 'Leads atendidos', 'atendidos')}
+            ${box(s.fichasEnviadas, 'Fichas enviadas', 'fichas')}
+            ${box(s.leadsDerivados, 'Leads derivados', 'derivados')}
+            ${box(s.fueraHorario, 'Fuera de horario', 'fuera_horario')}
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px;">
+            ${boxPct(s.tasaCalificacion, 'Tasa de calificación', 'derivados')}
+            ${boxPct(s.tasaLectura, 'Tasa de lectura')}
+            ${boxPct(s.tasaReactivacion, 'Tasa de reactivación', 'reactivados')}
+          </div>
+
+          ${renderComparacionPeriodo(s.comparacionPeriodo)}
+
+          <h3 style="color:#0b3d2e;margin-top:28px;margin-bottom:12px;">Tendencia — últimos 14 días</h3>
+          ${renderGraficoTendencia(s.serieTendencia)}
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:28px;">
+            <div>
+              <h3 style="color:#0b3d2e;margin:0 0 8px;">Por zona</h3>
+              <table style="width:100%;border-collapse:collapse;">${filasCiudad}</table>
+            </div>
+            <div>
+              <h3 style="color:#0b3d2e;margin:0 0 8px;">Por operación</h3>
+              <table style="width:100%;border-collapse:collapse;">${filasOperacion}</table>
+            </div>
           </div>
 
           <h3 style="color:#0b3d2e;margin-top:28px;">Desglose por tipo de lead</h3>
@@ -532,6 +646,57 @@ function renderStatsPage(fechaDesde, fechaHasta) {
 
           <hr style="margin-top:24px;border:none;border-top:1px solid #eee;">
           <p style="color:#999;font-size:13px;text-align:center;">Actualizado: ${actualizado} · Se refresca cada 60s</p>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+function renderDetalleCategoria(categoria, fechaDesde, fechaHasta) {
+  const eventos = stats.listarPorCategoria(categoria, fechaDesde, fechaHasta);
+  const todas = memory.getAll();
+  const titulo = CATEGORIA_LABELS[categoria] || 'Leads';
+
+  const filas = eventos.map((e) => {
+    const estado = todas[e.numero] || {};
+    const nombre = estado.datos?.nombre || e.numero;
+    const fecha = new Date(e.fecha).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' });
+    const asesor = estado.datos?.asesorAsignado?.nombre;
+    const detalle = categoria === 'derivados'
+      ? (asesor ? `👤 ${asesor}` : (HANDOFF_LABELS[e.tipo] || e.tipo))
+      : (HANDOFF_LABELS[e.tipo] || motivoConsulta(estado));
+    return `
+      <tr>
+        <td style="padding:10px 12px;border-bottom:1px solid #eee;">
+          <a href="/conversaciones?numero=${encodeURIComponent(e.numero)}&columna=todos" style="color:#0b3d2e;text-decoration:none;font-weight:700;font-size:14px;">${nombre}</a>
+          <div style="font-size:11px;color:#999;margin-top:2px;">${e.numero} · ${detalle}</div>
+        </td>
+        <td style="padding:10px 12px;border-bottom:1px solid #eee;text-align:right;color:#666;font-size:12px;white-space:nowrap;">${fecha}</td>
+      </tr>`;
+  }).join('');
+
+  let backHref = '/stats';
+  if (fechaDesde || fechaHasta) {
+    backHref += '?';
+    if (fechaDesde) backHref += `desde=${fechaDesde}`;
+    if (fechaDesde && fechaHasta) backHref += '&';
+    if (fechaHasta) backHref += `hasta=${fechaHasta}`;
+  }
+
+  return `
+    <html>
+      <head>
+        <meta charset="utf-8">
+      </head>
+      <body style="background:#0b3d2e;min-height:100vh;margin:0;display:flex;justify-content:center;align-items:flex-start;padding:40px 16px;font-family:sans-serif;">
+        <div style="background:white;border-radius:20px;padding:32px;max-width:600px;width:100%;">
+          <a href="${backHref}" style="color:#0b3d2e;font-size:13px;font-weight:600;text-decoration:none;">← Volver a Stats</a>
+          <h2 style="margin:8px 0 0;color:#0b3d2e;">${titulo}</h2>
+          <p style="color:#666;margin-top:4px;">${eventos.length} lead${eventos.length === 1 ? '' : 's'}</p>
+
+          <table style="width:100%;border-collapse:collapse;margin-top:12px;">
+            ${filas || '<tr><td style="padding:16px 12px;color:#999;">Sin datos para esta categoría.</td></tr>'}
+          </table>
         </div>
       </body>
     </html>
@@ -635,92 +800,298 @@ function motivoConsulta(estado) {
   }
 }
 
-function estadoLead(estado) {
-  const horasInactivo = estado.ultimoMensaje
-    ? (Date.now() - new Date(estado.ultimoMensaje).getTime()) / 1000 / 60 / 60
-    : 0;
-
-  if (estado.datos?.handoffListo) {
-    return { label: 'Calificado', bg: '#dcfce7', color: '#15803d' };
-  }
-  if (horasInactivo > 24) {
-    return { label: 'Sin respuesta', bg: '#f1f1f1', color: '#666' };
-  }
-  if (!estado.flujo || (estado.historial || []).length <= 2) {
-    return { label: 'Nuevo', bg: '#dbeafe', color: '#1d4ed8' };
-  }
-  return { label: 'Pendiente', bg: '#fef3c7', color: '#b45309' };
+function columnaLead(estado) {
+  if (!estado.datos?.handoffListo) return 'nuevos';
+  return 'calificados';
 }
 
-function renderConversacionesPage(numeroSeleccionado) {
+function sinRespuesta(estado) {
+  if (!estado.ultimoMensaje) return false;
+  const horas = (Date.now() - new Date(estado.ultimoMensaje).getTime()) / 1000 / 60 / 60;
+  return horas > 24 && !estado.datos?.handoffListo;
+}
+
+function csvEscape(valor) {
+  const texto = String(valor ?? '');
+  return /[",\n]/.test(texto) ? '"' + texto.replace(/"/g, '""') + '"' : texto;
+}
+
+function generarCSVLeads() {
   const todas = memory.getAll();
-  const lista = Object.entries(todas)
+  const nicoleNumero = process.env.WHATSAPP_NICOLE || '';
+  const columnas = ['Nombre', 'Numero', 'Flujo', 'Motivo', 'Sector', 'Operacion', 'Presupuesto', 'Estado', 'Asesor asignado', 'Prioridad', 'Nota', 'Ultimo mensaje'];
+  const filas = [columnas.join(',')];
+
+  for (const [numero, estado] of Object.entries(todas)) {
+    if (estado.esGuardia || numero === nicoleNumero) continue;
+    if (!estado.historial || estado.historial.length === 0) continue;
+    const fila = [
+      estado.datos?.nombre || '',
+      numero,
+      estado.flujo || '',
+      motivoConsulta(estado),
+      estado.datos?.sector || '',
+      estado.datos?.operacion || '',
+      estado.datos?.presupuesto || estado.datos?.precio || '',
+      columnaLead(estado) === 'nuevos' ? 'Nuevo' : 'Calificado',
+      estado.datos?.asesorAsignado?.nombre || '',
+      estado.prioridad || '',
+      estado.nota || '',
+      estado.ultimoMensaje ? new Date(estado.ultimoMensaje).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }) : '',
+    ].map(csvEscape);
+    filas.push(fila.join(','));
+  }
+
+  return filas.join('\n');
+}
+
+const COLUMNAS = [
+  { key: 'nuevos', label: 'Nuevos', color: '#1d4ed8', bg: '#dbeafe' },
+  { key: 'calificados', label: 'Calificados', color: '#b45309', bg: '#fef3c7' },
+];
+
+function operacionFiltro(estado) {
+  const op = (estado.datos?.operacion || '').toLowerCase();
+  switch (estado.flujo) {
+    case 'propietario':
+      if (op.includes('arriendo')) return 'arriendo';
+      if (op.includes('venta')) return 'venta';
+      return '';
+    case 'comprador': return 'compra';
+    case 'arrendatario': return 'alquiler';
+    default: return '';
+  }
+}
+
+function prioridadBadge(estado) {
+  if (estado.prioridad === 'urgente') {
+    return `<span style="display:inline-block;margin-top:6px;margin-right:4px;background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">🔴 Urgente</span>`;
+  }
+  if (estado.prioridad === 'atendido') {
+    return `<span style="display:inline-block;margin-top:6px;margin-right:4px;background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">✅ Atendido</span>`;
+  }
+  if (estado.prioridad === 'asignado') {
+    return `<span style="display:inline-block;margin-top:6px;margin-right:4px;background:#ede9fe;color:#6d28d9;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">🔵 Asignado</span>`;
+  }
+  if (estado.prioridad === 'descartado') {
+    return `<span style="display:inline-block;margin-top:6px;margin-right:4px;background:#f1f1f1;color:#888;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">⚪ Descartado</span>`;
+  }
+  return '';
+}
+
+function estaEnDerivaciones(estado) {
+  return estado.prioridad === 'urgente' || estado.prioridad === 'atendido' || estado.prioridad === 'asignado';
+}
+
+function renderTarjeta(numero, estado, numeroSeleccionado, miColumna) {
+  const nombre = estado.datos?.nombre || numero;
+  const motivo = motivoConsulta(estado);
+  const fecha = tiempoRelativo(estado.ultimoMensaje);
+  const activo = numero === numeroSeleccionado;
+  const asignado = estado.datos?.asesorAsignado;
+  const sinResp = sinRespuesta(estado);
+  const notaTexto = estado.nota || estado.notaAutomatica || '';
+  return `
+    <a href="/conversaciones?numero=${encodeURIComponent(numero)}&columna=${encodeURIComponent(miColumna)}"
+       class="tarjeta-lead"
+       data-nombre="${nombre.toLowerCase()}"
+       data-numero="${numero}"
+       data-sector="${(estado.datos?.sector || '').toLowerCase()}"
+       data-operacion="${operacionFiltro(estado)}"
+       data-sinrespuesta="${sinResp ? '1' : '0'}"
+       style="text-decoration:none;color:inherit;display:block;margin-bottom:8px;">
+      <div style="background:white;border:1px solid ${activo ? '#0b3d2e' : '#e5e7eb'};${activo ? 'box-shadow:0 0 0 2px #0b3d2e33;' : ''}border-radius:10px;padding:10px 12px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+          <div style="font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nombre}</div>
+          <div style="font-size:11px;color:#999;flex-shrink:0;">${fecha}</div>
+        </div>
+        <div style="font-size:12px;color:#666;margin-top:2px;">${motivo}</div>
+        ${asignado && asignado.nombre ? `<div style="font-size:11px;color:#0b3d2e;margin-top:4px;">👤 ${asignado.nombre}</div>` : ''}
+        ${sinResp ? `<span style="display:inline-block;margin-top:6px;background:#f1f1f1;color:#666;font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px;">Sin respuesta</span>` : ''}
+        ${prioridadBadge(estado)}
+        ${notaTexto ? `<div style="font-size:11px;color:#555;margin-top:4px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📝 ${notaTexto}</div>` : ''}
+      </div>
+    </a>`;
+}
+
+function iconoEstadoEnvio(estadoEnvio) {
+  switch (estadoEnvio) {
+    case 'leido': return '<span style="color:#53bdeb;">✓✓</span>';
+    case 'entregado': return '<span style="opacity:0.7;">✓✓</span>';
+    case 'enviado': return '<span style="opacity:0.7;">✓</span>';
+    case 'fallido': return '<span style="color:#f87171;">⚠ no enviado</span>';
+    default: return '';
+  }
+}
+
+function renderBurbujas(historial) {
+  return (historial || []).map((m) => {
+    const esUsuario = m.role === 'user';
+    const hora = m.ts
+      ? new Date(m.ts).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guayaquil' })
+      : '';
+    const icono = !esUsuario ? iconoEstadoEnvio(m.estadoEnvio) : '';
+    return `
+      <div style="display:flex;justify-content:${esUsuario ? 'flex-start' : 'flex-end'};margin:6px 0;">
+        <div style="max-width:85%;padding:8px 11px;border-radius:12px;font-size:12px;background:${esUsuario ? '#f0f0f0' : '#0b3d2e'};color:${esUsuario ? '#222' : 'white'};">
+          ${m.content.replace(/\n/g, '<br>')}
+          ${hora || icono ? `<div style="font-size:9px;opacity:0.85;margin-top:4px;text-align:right;">${hora}${icono ? ' ' + icono : ''}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function botonPrioridad(numero, miColumna, valor, label, activo, colorActivo) {
+  return `
+    <form method="POST" action="/conversaciones/prioridad" style="margin:0;">
+      <input type="hidden" name="numero" value="${numero}">
+      <input type="hidden" name="columna" value="${miColumna}">
+      <input type="hidden" name="prioridad" value="${valor}">
+      <button type="submit" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid ${activo ? colorActivo : '#ddd'};background:${activo ? colorActivo + '22' : 'white'};color:${activo ? colorActivo : '#555'};cursor:pointer;white-space:nowrap;">${label}</button>
+    </form>`;
+}
+
+function renderChatEnColumna(numero, estado, nicoleNumero, miColumna) {
+  const titulo = numero === nicoleNumero
+    ? 'Nicole Vinueza (derivaciones)'
+    : estado.esGuardia ? `Asesor — ${estado.nombreGuardia || numero}`
+    : (estado.datos?.nombre || numero);
+  const subtitulo = numero === nicoleNumero
+    ? 'Resúmenes enviados'
+    : estado.esGuardia ? 'Leads derivados'
+    : 'Flujo: ' + (estado.flujo || '-');
+  const esLead = numero !== nicoleNumero && !estado.esGuardia;
+
+  const seccionNotas = !esLead ? '' : `
+    <div style="padding:10px 12px 12px;border-top:1px solid #eee;">
+      ${estado.notaAutomatica ? `<div style="font-size:11px;color:#7c3aed;background:#f5f3ff;padding:6px 8px;border-radius:6px;margin-bottom:8px;">${estado.notaAutomatica}</div>` : ''}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+        ${botonPrioridad(numero, miColumna, 'urgente', '🔴 Urgente', estado.prioridad === 'urgente', '#b91c1c')}
+        ${botonPrioridad(numero, miColumna, 'atendido', '✅ Atendido', estado.prioridad === 'atendido', '#15803d')}
+        ${botonPrioridad(numero, miColumna, 'asignado', '🔵 Asignado', estado.prioridad === 'asignado', '#6d28d9')}
+        ${botonPrioridad(numero, miColumna, 'descartado', '⚪ Descartado', estado.prioridad === 'descartado', '#666')}
+        ${estado.prioridad ? botonPrioridad(numero, miColumna, '', 'Quitar', false, '#999') : ''}
+      </div>
+      <form method="POST" action="/conversaciones/nota">
+        <input type="hidden" name="numero" value="${numero}">
+        <input type="hidden" name="columna" value="${miColumna}">
+        <label style="font-size:11px;font-weight:700;color:#555;">📝 Nota interna</label>
+        <textarea name="nota" rows="2" placeholder="Ej: en seguimiento, no contesta..."
+          style="width:100%;box-sizing:border-box;font-size:12px;padding:6px;border-radius:6px;border:1px solid #ddd;margin-top:4px;resize:vertical;font-family:inherit;">${estado.nota || ''}</textarea>
+        <button type="submit" style="margin-top:6px;font-size:11px;padding:5px 12px;border-radius:6px;border:none;background:#0b3d2e;color:white;cursor:pointer;">Guardar nota</button>
+      </form>
+    </div>`;
+
+  return `
+    <a href="/conversaciones" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;color:#0b3d2e;font-size:12px;font-weight:600;padding:8px 10px;">
+      ← Volver
+    </a>
+    <div style="padding:0 12px 10px;">
+      <div style="font-weight:700;font-size:13px;">${titulo}</div>
+      <div style="color:#666;font-size:11px;margin-bottom:8px;">${numero} · ${subtitulo}</div>
+      <div>${renderBurbujas(estado.historial)}</div>
+    </div>
+    ${seccionNotas}`;
+}
+
+function renderCuerpoColumna(items, numeroSeleccionado, columnaSeleccionada, miColumna, nicoleNumero, tarjetaFn, vacioTexto) {
+  const seleccionado = columnaSeleccionada === miColumna
+    ? items.find(([numero]) => numero === numeroSeleccionado)
+    : null;
+  if (seleccionado) {
+    const [numero, estado] = seleccionado;
+    return renderChatEnColumna(numero, estado, nicoleNumero, miColumna);
+  }
+  return `<div style="padding:10px;">${
+    items.map(([numero, estado]) => tarjetaFn(numero, estado, numeroSeleccionado, miColumna)).join('') || `<p style="color:#999;font-size:12px;padding:8px;">${vacioTexto}</p>`
+  }</div>`;
+}
+
+function renderTarjetaInterna(numero, estado, numeroSeleccionado, miColumna) {
+  const nicoleNumero = process.env.WHATSAPP_NICOLE || '';
+  const nombre = numero === nicoleNumero
+    ? '📋 Nicole Vinueza (derivaciones)'
+    : `🔔 Asesor — ${estado.nombreGuardia || numero}`;
+  const fecha = tiempoRelativo(estado.ultimoMensaje);
+  const activo = numero === numeroSeleccionado;
+  return `
+    <a href="/conversaciones?numero=${encodeURIComponent(numero)}&columna=${encodeURIComponent(miColumna)}"
+       class="tarjeta-lead"
+       data-nombre="${nombre.toLowerCase()}"
+       data-numero="${numero}"
+       style="text-decoration:none;color:inherit;display:block;margin-bottom:8px;">
+      <div style="background:white;border:1px solid ${activo ? '#0b3d2e' : '#e5e7eb'};${activo ? 'box-shadow:0 0 0 2px #0b3d2e33;' : ''}border-radius:10px;padding:10px 12px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+          <div style="font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nombre}</div>
+          <div style="font-size:11px;color:#999;flex-shrink:0;">${fecha}</div>
+        </div>
+      </div>
+    </a>`;
+}
+
+function renderTarjetaDerivaciones(numero, estado, numeroSeleccionado, miColumna) {
+  const nicoleNumero = process.env.WHATSAPP_NICOLE || '';
+  return estado.esGuardia || numero === nicoleNumero
+    ? renderTarjetaInterna(numero, estado, numeroSeleccionado, miColumna)
+    : renderTarjeta(numero, estado, numeroSeleccionado, miColumna);
+}
+
+function renderConversacionesPage(numeroSeleccionado, columnaSeleccionada) {
+  const todas = memory.getAll();
+  const nicoleNumero = process.env.WHATSAPP_NICOLE || '';
+
+  const todasEntradas = Object.entries(todas)
     .filter(([, estado]) => estado.historial && estado.historial.length > 0)
     .sort(([, a], [, b]) => new Date(b.ultimoMensaje || 0) - new Date(a.ultimoMensaje || 0));
 
-  const nicoleNumero = process.env.WHATSAPP_NICOLE || '';
-  const filasLista = lista.map(([numero, estado]) => {
-    const nombre = numero === nicoleNumero
-      ? '📋 Nicole Vinueza (derivaciones)'
-      : estado.esGuardia
-        ? `🔔 Asesor de guardia — ${estado.nombreGuardia || numero}`
-        : (estado.datos?.nombre || numero);
-    const motivo = motivoConsulta(estado);
-    const est = estadoLead(estado);
-    const fecha = tiempoRelativo(estado.ultimoMensaje);
-    const activo = numero === numeroSeleccionado ? 'background:#e8f0ec;' : '';
+  const leads = todasEntradas.filter(([numero, estado]) => numero !== nicoleNumero && !estado.esGuardia);
+  const internas = todasEntradas.filter(([numero, estado]) => numero === nicoleNumero || estado.esGuardia);
+
+  const leadsFlagged = leads.filter(([, estado]) => estaEnDerivaciones(estado));
+  const derivacionesItems = [...internas, ...leadsFlagged]
+    .sort(([, a], [, b]) => new Date(b.ultimoMensaje || 0) - new Date(a.ultimoMensaje || 0));
+
+  const porColumna = { nuevos: [], calificados: [] };
+  for (const [numero, estado] of leads) {
+    if (estaEnDerivaciones(estado)) continue;
+    porColumna[columnaLead(estado)].push([numero, estado]);
+  }
+
+  const columnaTodosHtml = `
+    <div class="columna-kanban" style="min-width:260px;flex:1;display:flex;flex-direction:column;background:#f8f9fa;border-radius:12px;overflow:hidden;">
+      <div style="padding:12px 14px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:700;color:#0b3d2e;">Todos</span>
+        <span style="background:#0b3d2e;color:white;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;">${leads.length}</span>
+      </div>
+      <div style="overflow-y:auto;max-height:65vh;">
+        ${renderCuerpoColumna(leads, numeroSeleccionado, columnaSeleccionada, 'todos', nicoleNumero, renderTarjeta, 'Sin leads todavía.')}
+      </div>
+    </div>`;
+
+  const columnasHtml = COLUMNAS.map((col) => {
+    const items = porColumna[col.key];
     return `
-      <a href="/conversaciones?numero=${encodeURIComponent(numero)}"
-         class="fila-conv"
-         data-nombre="${nombre.toLowerCase()}"
-         data-numero="${numero}"
-         data-estado="${est.label}"
-         style="text-decoration:none;color:inherit;display:block;">
-        <div style="padding:12px 16px;border-bottom:1px solid #eee;${activo}">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;">
-            <div style="font-weight:700;">${nombre}</div>
-            <div style="font-size:12px;color:#999;">${fecha}</div>
-          </div>
-          <div style="font-size:13px;color:#666;margin-top:2px;">${motivo}</div>
-          <div style="margin-top:6px;">
-            <span style="background:${est.bg};color:${est.color};font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;">${est.label}</span>
-          </div>
+      <div class="columna-kanban" style="min-width:260px;flex:1;display:flex;flex-direction:column;background:#f8f9fa;border-radius:12px;overflow:hidden;">
+        <div style="padding:12px 14px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:700;color:${col.color};">${col.label}</span>
+          <span style="background:${col.bg};color:${col.color};font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;">${items.length}</span>
         </div>
-      </a>`;
+        <div style="overflow-y:auto;max-height:65vh;">
+          ${renderCuerpoColumna(items, numeroSeleccionado, columnaSeleccionada, col.key, nicoleNumero, renderTarjeta, 'Sin leads acá.')}
+        </div>
+      </div>`;
   }).join('');
 
-  let panelDerecho = '<p style="color:#999;padding:20px;">Seleccioná una conversación de la lista.</p>';
-  if (numeroSeleccionado && todas[numeroSeleccionado]) {
-    const estado = todas[numeroSeleccionado];
-    const burbujas = (estado.historial || []).map((m) => {
-      const esUsuario = m.role === 'user';
-      const hora = m.ts
-        ? new Date(m.ts).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guayaquil' })
-        : '';
-      return `
-        <div style="display:flex;justify-content:${esUsuario ? 'flex-start' : 'flex-end'};margin:8px 0;">
-          <div style="max-width:70%;padding:10px 14px;border-radius:14px;background:${esUsuario ? '#f0f0f0' : '#0b3d2e'};color:${esUsuario ? '#222' : 'white'};">
-            ${m.content.replace(/\n/g, '<br>')}
-            ${hora ? `<div style="font-size:10px;opacity:0.55;margin-top:5px;text-align:right;">${hora}</div>` : ''}
-          </div>
-        </div>`;
-    }).join('');
-
-    panelDerecho = `
-      <div style="padding:16px;">
-        <h3 style="margin:0 0 4px;color:#0b3d2e;">${
-          numeroSeleccionado === nicoleNumero ? 'Nicole Vinueza — Derivaciones' :
-          estado.esGuardia ? `Asesor de guardia — ${estado.nombreGuardia || numeroSeleccionado}` :
-          (estado.datos?.nombre || numeroSeleccionado)
-        }</h3>
-        <p style="color:#666;font-size:13px;margin:0 0 16px;">${numeroSeleccionado} · ${
-          numeroSeleccionado === nicoleNumero ? 'Resúmenes enviados' :
-          estado.esGuardia ? 'Leads derivados' :
-          'Flujo: ' + (estado.flujo || '-')
-        }</p>
-        <div>${burbujas}</div>
-      </div>`;
-  }
+  const columnaInternasHtml = `
+    <div class="columna-kanban" style="min-width:260px;flex:1;display:flex;flex-direction:column;background:#f8f9fa;border-radius:12px;overflow:hidden;">
+      <div style="padding:12px 14px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:700;color:#666;">Derivaciones</span>
+        <span style="background:#e5e7eb;color:#666;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;">${derivacionesItems.length}</span>
+      </div>
+      <div style="overflow-y:auto;max-height:65vh;">
+        ${renderCuerpoColumna(derivacionesItems, numeroSeleccionado, columnaSeleccionada, 'derivaciones', nicoleNumero, renderTarjetaDerivaciones, 'Sin derivaciones todavía.')}
+      </div>
+    </div>`;
 
   return `
     <html>
@@ -728,87 +1099,78 @@ function renderConversacionesPage(numeroSeleccionado) {
         <meta charset="utf-8">
       </head>
       <body style="background:#0b3d2e;min-height:100vh;margin:0;padding:24px;font-family:sans-serif;">
-        <div style="background:white;border-radius:16px;max-width:1000px;margin:0 auto;display:flex;height:calc(100vh - 48px);overflow:hidden;">
-          <div style="width:320px;border-right:1px solid #eee;display:flex;flex-direction:column;">
-            <div style="padding:16px;border-bottom:1px solid #eee;flex-shrink:0;">
-              <h3 style="margin:0 0 12px;color:#0b3d2e;">Conversaciones</h3>
-              <div style="position:relative;">
+        <div style="max-width:1300px;margin:0 auto;">
+          <div style="background:white;border-radius:16px;padding:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+              <div style="display:flex;align-items:center;gap:16px;">
+                <h2 style="margin:0;color:#0b3d2e;">🏠 CRM de Valentina</h2>
+                <a href="/stats" style="color:#0b3d2e;font-size:13px;font-weight:600;text-decoration:none;background:#eef6f2;padding:6px 12px;border-radius:8px;">📊 Stats</a>
+                <a href="/conversaciones/exportar.csv" style="color:#0b3d2e;font-size:13px;font-weight:600;text-decoration:none;background:#eef6f2;padding:6px 12px;border-radius:8px;">⬇️ Exportar CSV</a>
+              </div>
+              <div style="position:relative;width:260px;">
                 <input id="buscador" type="text" placeholder="Buscar nombre o número..."
                   style="width:100%;box-sizing:border-box;padding:8px 12px 8px 32px;border-radius:8px;border:1px solid #ddd;font-size:14px;">
                 <span style="position:absolute;left:10px;top:8px;color:#999;">🔍</span>
               </div>
-              <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
-                <button class="filtro-estado" data-filtro="Todos" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:#0b3d2e;color:white;font-size:12px;cursor:pointer;">Todos</button>
-                <button class="filtro-estado" data-filtro="Nuevo" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:white;color:#333;font-size:12px;cursor:pointer;">Nuevos</button>
-                <button class="filtro-estado" data-filtro="Calificado" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:white;color:#333;font-size:12px;cursor:pointer;">Calificados</button>
-                <button class="filtro-estado" data-filtro="Pendiente" style="padding:4px 10px;border-radius:999px;border:1px solid #ddd;background:white;color:#333;font-size:12px;cursor:pointer;">Pendientes</button>
-              </div>
             </div>
-            <div id="lista-conversaciones" style="overflow-y:auto;flex:1;">
-              ${filasLista || '<p style="padding:16px;color:#999;">Sin conversaciones todavía.</p>'}
-              <p id="sin-resultados" style="display:none;padding:16px;color:#999;">Sin resultados.</p>
+
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+              <input id="filtroSector" type="text" placeholder="Filtrar por sector..."
+                style="padding:6px 10px;border-radius:8px;border:1px solid #ddd;font-size:12px;width:160px;">
+              <select id="filtroOperacion" style="padding:6px 10px;border-radius:8px;border:1px solid #ddd;font-size:12px;">
+                <option value="">Todas las operaciones</option>
+                <option value="venta">Venta</option>
+                <option value="arriendo">Arriendo</option>
+                <option value="compra">Compra</option>
+                <option value="alquiler">Alquiler</option>
+              </select>
+              <label style="font-size:12px;color:#555;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                <input id="filtroSinRespuesta" type="checkbox"> Sin respuesta
+              </label>
+              <a href="#" id="limpiarFiltros" style="font-size:12px;color:#999;text-decoration:underline;">Limpiar filtros</a>
             </div>
-          </div>
-          <div id="panel-chat" style="flex:1;overflow-y:auto;">
-            ${panelDerecho}
+
+            <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;">
+              ${columnaTodosHtml}
+              ${columnasHtml}
+              ${columnaInternasHtml}
+            </div>
           </div>
         </div>
 
         <script>
           const buscador = document.getElementById('buscador');
-          const filas = Array.from(document.querySelectorAll('.fila-conv'));
-          const botonesFiltro = Array.from(document.querySelectorAll('.filtro-estado'));
-          const sinResultados = document.getElementById('sin-resultados');
-          const listaConv = document.getElementById('lista-conversaciones');
-          const panelChat = document.getElementById('panel-chat');
-
-          // Restaurar filtro activo desde sessionStorage
-          let filtroActivo = sessionStorage.getItem('filtroActivo') || 'Todos';
-
-          // Scroll chat al mensaje más reciente
-          if (panelChat) panelChat.scrollTop = panelChat.scrollHeight;
-
-          // Restaurar posición de la lista al volver de un chat
-          const scrollGuardado = sessionStorage.getItem('listaScroll');
-          if (listaConv && scrollGuardado) listaConv.scrollTop = parseInt(scrollGuardado, 10);
-
-          // Guardar posición de la lista antes de navegar a un chat
-          filas.forEach((fila) => {
-            fila.addEventListener('click', () => {
-              sessionStorage.setItem('listaScroll', listaConv.scrollTop);
-            });
-          });
+          const filtroSector = document.getElementById('filtroSector');
+          const filtroOperacion = document.getElementById('filtroOperacion');
+          const filtroSinRespuesta = document.getElementById('filtroSinRespuesta');
+          const limpiarFiltros = document.getElementById('limpiarFiltros');
+          const tarjetas = Array.from(document.querySelectorAll('.tarjeta-lead'));
 
           function aplicarFiltros() {
             const texto = buscador.value.trim().toLowerCase();
-            let visibles = 0;
-            filas.forEach((fila) => {
-              const coincideTexto = !texto || fila.dataset.nombre.includes(texto) || fila.dataset.numero.includes(texto);
-              const coincideEstado = filtroActivo === 'Todos' || fila.dataset.estado === filtroActivo;
-              const visible = coincideTexto && coincideEstado;
-              fila.style.display = visible ? 'block' : 'none';
-              if (visible) visibles++;
+            const sector = filtroSector.value.trim().toLowerCase();
+            const operacion = filtroOperacion.value;
+            const soloSinRespuesta = filtroSinRespuesta.checked;
+
+            tarjetas.forEach((t) => {
+              const coincideTexto = !texto || t.dataset.nombre.includes(texto) || t.dataset.numero.includes(texto);
+              const coincideSector = !sector || (t.dataset.sector || '').includes(sector);
+              const coincideOperacion = !operacion || t.dataset.operacion === operacion;
+              const coincideSinResp = !soloSinRespuesta || t.dataset.sinrespuesta === '1';
+              const visible = coincideTexto && coincideSector && coincideOperacion && coincideSinResp;
+              t.style.display = visible ? 'block' : 'none';
             });
-            sinResultados.style.display = visibles === 0 ? 'block' : 'none';
           }
 
-          function activarBoton(filtro) {
-            filtroActivo = filtro;
-            sessionStorage.setItem('filtroActivo', filtro);
-            botonesFiltro.forEach((b) => {
-              const activo = b.dataset.filtro === filtro;
-              b.style.background = activo ? '#0b3d2e' : 'white';
-              b.style.color = activo ? 'white' : '#333';
-            });
+          [buscador, filtroSector].forEach((el) => el.addEventListener('input', aplicarFiltros));
+          [filtroOperacion, filtroSinRespuesta].forEach((el) => el.addEventListener('change', aplicarFiltros));
+          limpiarFiltros.addEventListener('click', (e) => {
+            e.preventDefault();
+            buscador.value = '';
+            filtroSector.value = '';
+            filtroOperacion.value = '';
+            filtroSinRespuesta.checked = false;
             aplicarFiltros();
-          }
-
-          // Aplicar filtro guardado al cargar
-          activarBoton(filtroActivo);
-
-          buscador.addEventListener('input', aplicarFiltros);
-          botonesFiltro.forEach((boton) => {
-            boton.addEventListener('click', () => activarBoton(boton.dataset.filtro));
           });
         </script>
       </body>
@@ -823,8 +1185,43 @@ function startServer() {
     if (parsedUrl.pathname === '/conversaciones') {
       if (!checkAuth(req, res)) return;
       const numeroSeleccionado = parsedUrl.searchParams.get('numero');
+      const columnaSeleccionada = parsedUrl.searchParams.get('columna');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(renderConversacionesPage(numeroSeleccionado));
+      res.end(renderConversacionesPage(numeroSeleccionado, columnaSeleccionada));
+      return;
+    }
+
+    if (parsedUrl.pathname === '/conversaciones/nota' && req.method === 'POST') {
+      if (!checkAuth(req, res)) return;
+      const body = await readBody(req);
+      const params = new URLSearchParams(body.toString('utf8'));
+      const numero = params.get('numero');
+      const columna = params.get('columna') || '';
+      if (numero) memory.set(numero, { nota: (params.get('nota') || '').trim() });
+      res.writeHead(302, { Location: `/conversaciones?numero=${encodeURIComponent(numero || '')}&columna=${encodeURIComponent(columna)}` });
+      res.end();
+      return;
+    }
+
+    if (parsedUrl.pathname === '/conversaciones/prioridad' && req.method === 'POST') {
+      if (!checkAuth(req, res)) return;
+      const body = await readBody(req);
+      const params = new URLSearchParams(body.toString('utf8'));
+      const numero = params.get('numero');
+      const columna = params.get('columna') || '';
+      if (numero) memory.set(numero, { prioridad: params.get('prioridad') || null, prioridadManual: true });
+      res.writeHead(302, { Location: `/conversaciones?numero=${encodeURIComponent(numero || '')}&columna=${encodeURIComponent(columna)}` });
+      res.end();
+      return;
+    }
+
+    if (parsedUrl.pathname === '/conversaciones/exportar.csv') {
+      if (!checkAuth(req, res)) return;
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="leads_valentina.csv"',
+      });
+      res.end('﻿' + generarCSVLeads());
       return;
     }
 
@@ -833,6 +1230,15 @@ function startServer() {
       const fechaHasta = parsedUrl.searchParams.get('hasta') || null;
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(renderStatsPage(fechaDesde, fechaHasta));
+      return;
+    }
+
+    if (parsedUrl.pathname === '/stats/detalle') {
+      const categoria = parsedUrl.searchParams.get('tipo') || '';
+      const fechaDesde = parsedUrl.searchParams.get('desde') || null;
+      const fechaHasta = parsedUrl.searchParams.get('hasta') || null;
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(renderDetalleCategoria(categoria, fechaDesde, fechaHasta));
       return;
     }
 
@@ -900,6 +1306,14 @@ function startServer() {
             procesarMensaje(numeroLimpio, texto).catch((e) =>
               console.error('[webhook] Error procesando mensaje:', e.message),
             );
+          }
+
+          // Estados de entrega/lectura (enviado → entregado → leído)
+          const ESTADOS_WA = { sent: 'enviado', delivered: 'entregado', read: 'leido', failed: 'fallido' };
+          const statuses = change.value?.statuses || [];
+          for (const st of statuses) {
+            const estado = ESTADOS_WA[st.status];
+            if (estado && st.id) memory.setMessageStatus(st.id, estado);
           }
         }
       }
