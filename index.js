@@ -430,8 +430,8 @@ async function procesarMensaje(numeroLimpio, texto) {
   const consentEnEstaRespuesta = respuesta.includes('[CONSENT_GRANTED]');
   const textoLimpio = cleanResponse(respuesta);
 
-  // Guardar respuesta en historial
-  memory.addMessage(numeroLimpio, 'assistant', respuesta);
+  // Guardar respuesta en historial (sin tags internos)
+  memory.addMessage(numeroLimpio, 'assistant', textoLimpio || respuesta);
 
   // Marcar consentimiento si aplica
   if (consentEnEstaRespuesta) {
