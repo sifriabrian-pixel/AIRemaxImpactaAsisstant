@@ -481,9 +481,14 @@ async function procesarMensaje(numeroLimpio, texto) {
     if (flujoDelTrigger) {
       stats.logEvent(`flujo_${flujoDelTrigger}`, numeroLimpio);
       const historialActual = estadoActual.historial.filter(m => m.role === 'user' || m.role === 'assistant');
-      const extraidos = await extraerDatos(historialActual, flujoDelTrigger);
-      datosExtraidos = { ...datosExtraidos, ...extraidos };
-      memory.set(numeroLimpio, { flujo: flujoDelTrigger, datos: datosExtraidos });
+      try {
+        const extraidos = await extraerDatos(historialActual, flujoDelTrigger);
+        datosExtraidos = { ...datosExtraidos, ...extraidos };
+        memory.set(numeroLimpio, { flujo: flujoDelTrigger, datos: datosExtraidos });
+      } catch (e) {
+        // Si la extracción de datos falla, el handoff igual se dispara con los datos existentes
+        console.error(`[trigger] extraerDatos falló para ${numeroLimpio} — usando datos existentes:`, e.message);
+      }
     }
 
     await handleTrigger(trigger, numeroLimpio, datosExtraidos);
