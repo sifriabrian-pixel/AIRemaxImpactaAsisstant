@@ -918,6 +918,7 @@ function renderTarjeta(numero, estado, numeroSeleccionado, miColumna) {
           <div style="font-size:11px;color:#999;flex-shrink:0;">${fecha}</div>
         </div>
         <div style="font-size:12px;color:#666;margin-top:2px;">${motivo}</div>
+        ${miColumna === 'calificados' ? `<span style="display:inline-block;margin-top:5px;background:#dcfce7;color:#15803d;font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px;">✓ Calificado</span>` : ''}
         ${asignado && asignado.nombre ? `<div style="font-size:11px;color:#2762EA;margin-top:4px;">👤 ${asignado.nombre}</div>` : ''}
         ${sinResp ? `<span style="display:inline-block;margin-top:6px;background:#f1f1f1;color:#666;font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px;">Sin respuesta</span>` : ''}
         ${prioridadBadge(estado)}
@@ -995,7 +996,7 @@ function renderChatEnColumna(numero, estado, nicoleNumero, miColumna) {
     </div>`;
 
   return `
-    <a href="/conversaciones" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;color:#2762EA;font-size:12px;font-weight:600;padding:8px 10px;">
+    <a href="/conversaciones" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;color:#2762EA;font-size:12px;font-weight:600;padding:8px 10px;position:sticky;top:0;background:white;z-index:10;border-bottom:1px solid #f0f0f0;">
       ← Volver
     </a>
     <div style="padding:0 12px 10px;">
