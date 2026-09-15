@@ -938,20 +938,29 @@ function iconoEstadoEnvio(estadoEnvio) {
 }
 
 function renderBurbujas(historial) {
-  return (historial || []).map((m) => {
+  let ultimoDia = '';
+  const partes = [];
+  for (const m of historial || []) {
     const esUsuario = m.role === 'user';
     const hora = m.ts
       ? new Date(m.ts).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guayaquil' })
       : '';
+    const diaKey = m.ts ? m.ts.slice(0, 10) : '';
+    if (diaKey && diaKey !== ultimoDia) {
+      ultimoDia = diaKey;
+      const etiqueta = new Date(diaKey + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'short' });
+      partes.push(`<div style="text-align:center;margin:10px 0 6px;"><span style="font-size:10px;color:#999;background:#f3f4f6;padding:3px 10px;border-radius:999px;">${etiqueta}</span></div>`);
+    }
     const icono = !esUsuario ? iconoEstadoEnvio(m.estadoEnvio) : '';
-    return `
+    partes.push(`
       <div style="display:flex;justify-content:${esUsuario ? 'flex-start' : 'flex-end'};margin:6px 0;">
         <div style="max-width:85%;padding:8px 11px;border-radius:12px;font-size:12px;background:${esUsuario ? '#f0f0f0' : '#2762EA'};color:${esUsuario ? '#222' : 'white'};">
           ${m.content.replace(/\n/g, '<br>')}
           ${hora || icono ? `<div style="font-size:9px;opacity:0.85;margin-top:4px;text-align:right;">${hora}${icono ? ' ' + icono : ''}</div>` : ''}
         </div>
-      </div>`;
-  }).join('');
+      </div>`);
+  }
+  return partes.join('');
 }
 
 function botonPrioridad(numero, miColumna, valor, label, activo, colorActivo) {
