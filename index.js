@@ -14,6 +14,18 @@ const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
 const CLIENT_NAME = process.env.CLIENT_NAME || 'RE/MAX Impacta';
 const AGENT_NAME = process.env.AGENT_NAME || 'Valentina';
 
+// Deduplicación de webhooks: Meta a veces reintenta el mismo evento
+const mensajesProcesados = new Set();
+function yaVisto(wamid) {
+  if (mensajesProcesados.has(wamid)) return true;
+  mensajesProcesados.add(wamid);
+  if (mensajesProcesados.size > 2000) {
+    const iter = mensajesProcesados.values();
+    for (let i = 0; i < 500; i++) mensajesProcesados.delete(iter.next().value);
+  }
+  return false;
+}
+
 const TRIGGERS = [
   'HANDOFF_PROPIETARIO',
   'HANDOFF_IMBABURA_NICOLE',
@@ -467,8 +479,15 @@ async function procesarMensaje(numeroLimpio, texto) {
   }
 
   // Procesar trigger principal (excluye CONSENT_GRANTED que ya fue manejado arriba)
+  const HANDOFF_TRIGGERS = ['HANDOFF_PROPIETARIO', 'HANDOFF_IMBABURA_NICOLE', 'HANDOFF_ASESOR', 'HANDOFF_COMPRADOR', 'HANDOFF_ARRENDATARIO', 'HANDOFF_GENERAL', 'AGENDA_ENTREVISTA'];
   if (trigger && trigger !== 'CONSENT_GRANTED') {
     const estadoActual = memory.get(numeroLimpio);
+
+    // Si ya se derivó este lead, no volver a disparar un HANDOFF (previene duplicados)
+    if (HANDOFF_TRIGGERS.includes(trigger) && estadoActual.datos?.handoffListo) {
+      console.log(`[trigger] Ignorado — handoff ya completado para ${numeroLimpio} (trigger: ${trigger})`);
+      return;
+    }
 
     // Detectar flujo desde el trigger para extraer datos correctamente
     const flujoDelTrigger =
@@ -1337,6 +1356,11 @@ function startServer() {
             if (msg.type !== 'text') continue;
             const texto = msg.text?.body || '';
             if (!texto) continue;
+
+            if (msg.id && yaVisto(msg.id)) {
+              console.log(`[webhook] Mensaje duplicado ignorado: ${msg.id}`);
+              continue;
+            }
 
             procesarMensaje(numeroLimpio, texto).catch((e) =>
               console.error('[webhook] Error procesando mensaje:', e.message),
