@@ -372,7 +372,7 @@ async function recibirDocumentoCandidato(numeroLimpio, tipo, mediaId) {
   }
 }
 
-async function procesarMensaje(numeroLimpio, texto) {
+async function procesarMensaje(numeroLimpio, texto, referral) {
   console.log(`[msg] ${numeroLimpio}: ${texto}`);
 
   // Override de guardia
@@ -400,6 +400,22 @@ async function procesarMensaje(numeroLimpio, texto) {
   if ((estado.followup24h || estado.followup72h) && !estado.reactivadoRegistrado && !estado.datos?.handoffListo) {
     stats.logEvent('reactivado', numeroLimpio);
     memory.set(numeroLimpio, { reactivadoRegistrado: true });
+  }
+
+  // Si el mensaje viene de un anuncio de Meta ("click to WhatsApp"), Meta manda
+  // un objeto "referral" con el anuncio de origen. Se guarda una sola vez.
+  if (referral && !estado.origen) {
+    memory.set(numeroLimpio, {
+      origen: {
+        fuente: referral.source_type || 'anuncio',
+        titulo: referral.headline || null,
+        url: referral.source_url || null,
+        ctwaClid: referral.ctwa_clid || null,
+        ts: new Date().toISOString(),
+      },
+    });
+    stats.logEvent('origen_campania', numeroLimpio);
+    console.log(`[origen] ${numeroLimpio} llegó desde: ${referral.headline || referral.source_url || 'anuncio de Meta'}`);
   }
 
   // Agregar mensaje al historial
@@ -855,7 +871,7 @@ function csvEscape(valor) {
 function generarCSVLeads() {
   const todas = memory.getAll();
   const nicoleNumero = process.env.WHATSAPP_NICOLE || '';
-  const columnas = ['Nombre', 'Numero', 'Flujo', 'Motivo', 'Sector', 'Operacion', 'Presupuesto', 'Estado', 'Asesor asignado', 'Prioridad', 'Nota', 'Ultimo mensaje'];
+  const columnas = ['Nombre', 'Numero', 'Flujo', 'Motivo', 'Sector', 'Operacion', 'Presupuesto', 'Estado', 'Asesor asignado', 'Prioridad', 'Origen (campaña)', 'Nota', 'Ultimo mensaje'];
   const filas = [columnas.join(',')];
 
   for (const [numero, estado] of Object.entries(todas)) {
@@ -872,6 +888,7 @@ function generarCSVLeads() {
       columnaLead(estado) === 'nuevos' ? 'Nuevo' : 'Calificado',
       estado.datos?.asesorAsignado?.nombre || '',
       estado.prioridad || '',
+      estado.origen?.titulo || estado.origen?.url || '',
       estado.nota || '',
       estado.ultimoMensaje ? new Date(estado.ultimoMensaje).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }) : '',
     ].map(csvEscape);
@@ -1035,6 +1052,10 @@ function renderChatEnColumna(numero, estado, nicoleNumero, miColumna) {
     <div style="padding:0 12px 10px;">
       <div style="font-weight:700;font-size:13px;">${titulo}</div>
       <div style="color:#666;font-size:11px;margin-bottom:8px;">${numero} · ${subtitulo}</div>
+      ${estado.origen ? `<div style="font-size:11px;color:#2762EA;background:#EEF2FD;padding:6px 8px;border-radius:6px;margin-bottom:8px;">
+        📣 Vino de un ${estado.origen.fuente === 'post' ? 'post' : 'anuncio'} de Meta${estado.origen.titulo ? `: "${estado.origen.titulo}"` : ''}
+        ${estado.origen.url ? `<div style="margin-top:2px;"><a href="${estado.origen.url}" target="_blank" rel="noopener" style="color:#2762EA;text-decoration:underline;">Ver anuncio ↗</a></div>` : ''}
+      </div>` : ''}
       <div>${renderBurbujas(estado.historial)}</div>
     </div>
     ${seccionNotas}`;
@@ -1362,7 +1383,7 @@ function startServer() {
               continue;
             }
 
-            procesarMensaje(numeroLimpio, texto).catch((e) =>
+            procesarMensaje(numeroLimpio, texto, msg.referral).catch((e) =>
               console.error('[webhook] Error procesando mensaje:', e.message),
             );
           }
