@@ -14,6 +14,56 @@ const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
 const CLIENT_NAME = process.env.CLIENT_NAME || 'RE/MAX Impacta';
 const AGENT_NAME = process.env.AGENT_NAME || 'Valentina';
 
+// ─── Calificación determinística ─────────────────────────────────────────────
+// Criterio por flujo. Mover a DB (tabla qualification_config) cuando sea multi-tenant.
+// required: campos de estado.datos que deben ser truthy.
+// exclude:  campos de estado.datos que deben ser falsy (descalificadores).
+const QUALIFICATION = {
+  comprador: {
+    required: ['tipo', 'sector', 'presupuesto', 'dormitorios'],
+    exclude: [],
+  },
+  arrendatario: {
+    required: ['tipo', 'sector', 'presupuesto', 'dormitorios'],
+    exclude: [],
+  },
+  propietario: {
+    // disponibilidad = "día y preferencia horaria" (campo combinado del schema de extraerDatos)
+    required: ['sector', 'disponibilidad'],
+    exclude: ['fueraCobertura'],
+  },
+  asesor: {
+    required: ['entrevistaConfirmada'],
+    exclude: ['descalificado'],
+  },
+};
+
+function isQualified(estado) {
+  const config = QUALIFICATION[estado.flujo];
+  if (!config) return false;
+  const d = estado.datos || {};
+  if (!config.required.every(campo => !!d[campo])) return false;
+  if (config.exclude.some(campo => !!d[campo])) return false;
+  return true;
+}
+
+// Mapea flujo → trigger de handoff correcto para derivación backend
+function resolverTriggerPorFlujo(estado) {
+  const d = estado.datos || {};
+  switch (estado.flujo) {
+    case 'propietario': {
+      const zona = (d.zona || '').toLowerCase();
+      const esImbabura = IBARRA_KEYWORDS_IDX.some(k => zona.includes(k));
+      return esImbabura ? 'HANDOFF_IMBABURA_NICOLE' : 'HANDOFF_PROPIETARIO';
+    }
+    case 'asesor':       return 'AGENDA_ENTREVISTA';
+    case 'comprador':    return 'HANDOFF_COMPRADOR';
+    case 'arrendatario': return 'HANDOFF_ARRENDATARIO';
+    default:             return null;
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Deduplicación de webhooks: Meta a veces reintenta el mismo evento
 const mensajesProcesados = new Set();
 function yaVisto(wamid) {
@@ -528,6 +578,32 @@ async function procesarMensaje(numeroLimpio, texto, referral) {
 
     await handleTrigger(trigger, numeroLimpio, datosExtraidos);
   }
+
+  // ── Verificación determinística post-turno ────────────────────────────────
+  // Corre DESPUÉS del bloque LLM para operar sobre datos ya extraídos.
+  // Si isQualified=true y el lead no fue derivado todavía → derivar.
+  // Si LLM y backend discrepan → logear para monitoreo.
+  {
+    const estadoPost = memory.get(numeroLimpio);
+    const yaDerivado = !!estadoPost.datos?.handoffListo;
+    const llmDerivo = trigger ? HANDOFF_TRIGGERS.includes(trigger) : false;
+    const backendCalifica = isQualified(estadoPost);
+
+    if (backendCalifica && !yaDerivado) {
+      // Backend detecta calificación que el LLM no completó (tag ausente o handleTrigger falló)
+      const triggerBackend = resolverTriggerPorFlujo(estadoPost);
+      if (triggerBackend) {
+        console.log(`[qualify] Backend deriva ${numeroLimpio} — flujo: ${estadoPost.flujo}, trigger: ${triggerBackend} (LLM tag: ${trigger || 'ninguno'})`);
+        stats.logEvent('qualified', numeroLimpio);
+        await handleTrigger(triggerBackend, numeroLimpio, estadoPost.datos || {});
+      }
+    } else if (llmDerivo && !backendCalifica) {
+      // LLM quiso derivar pero los datos extraídos no cumplen el criterio
+      console.log(`[qualify] qualification_mismatch — LLM emitió ${trigger} pero isQualified=false | flujo: ${estadoPost.flujo} | datos: ${JSON.stringify(estadoPost.datos)}`);
+    }
+    // Si ambos coinciden (ambos true o ambos false): sin log, camino esperado.
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 }
 
 const HANDOFF_LABELS = {
