@@ -702,6 +702,28 @@ function renderStatsPage(fechaDesde, fechaHasta) {
     .map((c) => `<tr><td style="padding:4px 12px;">${c}</td><td style="padding:4px 12px;text-align:right;font-weight:700;">${s.desgloseCiudad[c] || 0}</td></tr>`)
     .join('');
 
+  // Top leads por anuncio de Meta
+  const todosAnuncios = memory.getAll();
+  const nicoleNum = process.env.WHATSAPP_NICOLE || '';
+  const conteoAnuncios = {};
+  for (const [num, est] of Object.entries(todosAnuncios)) {
+    if (est.esGuardia || num === nicoleNum) continue;
+    const titulo = est.origen?.titulo || est.origen?.url || null;
+    if (!titulo) continue;
+    conteoAnuncios[titulo] = (conteoAnuncios[titulo] || 0) + 1;
+  }
+  const topAnuncios = Object.entries(conteoAnuncios)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+  const filasAnuncios = topAnuncios.length > 0
+    ? topAnuncios.map(([nombre, n], i) => `
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:6px 12px;color:#888;font-size:12px;">${i + 1}</td>
+          <td style="padding:6px 12px;font-size:13px;">${nombre}</td>
+          <td style="padding:6px 12px;text-align:right;font-weight:700;">${n}</td>
+        </tr>`).join('')
+    : `<tr><td colspan="3" style="padding:12px;color:#999;font-size:13px;text-align:center;">Sin leads de anuncios aún</td></tr>`;
+
   const filasOperacion = [
     ['Venta', s.desgloseOperacion.venta],
     ['Alquiler', s.desgloseOperacion.alquiler],
@@ -766,6 +788,18 @@ function renderStatsPage(fechaDesde, fechaHasta) {
 
           <h3 style="color:#0D1526;margin-top:28px;">Desglose por tipo de lead</h3>
           <table style="width:100%;border-collapse:collapse;">${filasFlujo}</table>
+
+          <h3 style="color:#0D1526;margin-top:28px;margin-bottom:12px;">Top leads por anuncio</h3>
+          <table style="width:100%;border-collapse:collapse;background:#f9faff;border-radius:8px;overflow:hidden;">
+            <thead>
+              <tr style="background:#EEF2FD;">
+                <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6B7A9C;font-weight:600;">#</th>
+                <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6B7A9C;font-weight:600;">Anuncio</th>
+                <th style="padding:8px 12px;text-align:right;font-size:11px;color:#6B7A9C;font-weight:600;">Leads</th>
+              </tr>
+            </thead>
+            <tbody>${filasAnuncios}</tbody>
+          </table>
 
           <hr style="margin-top:24px;border:none;border-top:1px solid #eee;">
           <p style="color:#999;font-size:13px;text-align:center;">Actualizado: ${actualizado} · Se refresca cada 60s</p>
