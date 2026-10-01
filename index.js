@@ -455,17 +455,18 @@ async function procesarMensaje(numeroLimpio, texto, referral) {
   // Si el mensaje viene de un anuncio de Meta ("click to WhatsApp"), Meta manda
   // un objeto "referral" con el anuncio de origen. Se guarda una sola vez.
   if (referral && !estado.origen) {
+    const tituloReferral = referral.headline || referral.body || null;
     memory.set(numeroLimpio, {
       origen: {
         fuente: referral.source_type || 'anuncio',
-        titulo: referral.headline || null,
+        titulo: tituloReferral,
         url: referral.source_url || null,
         ctwaClid: referral.ctwa_clid || null,
         ts: new Date().toISOString(),
       },
     });
     stats.logEvent('origen_campania', numeroLimpio);
-    console.log(`[origen] ${numeroLimpio} llegó desde: ${referral.headline || referral.source_url || 'anuncio de Meta'}`);
+    console.log(`[origen] ${numeroLimpio} llegó desde: ${tituloReferral || referral.source_url || 'anuncio de Meta'} | raw referral: ${JSON.stringify(referral)}`);
   }
 
   // Agregar mensaje al historial
@@ -679,15 +680,15 @@ function renderStatsPage(fechaDesde, fechaHasta, anuncio = null) {
   const numerosPermitidos = anuncio
     ? new Set(Object.entries(todosLeds)
         .filter(([num, est]) => !est.esGuardia && num !== nicoleNumFilt &&
-          (est.origen?.titulo === anuncio || est.origen?.url === anuncio))
+          ((est.origen?.titulo || est.origen?.url) === anuncio))
         .map(([num]) => num))
     : null;
 
-  // Anuncios únicos para el dropdown
+  // Anuncios únicos para el dropdown: título si existe, URL si no
   const anunciosUnicos = [...new Set(
     Object.values(todosLeds)
-      .filter(est => !est.esGuardia && est.origen?.titulo)
-      .map(est => est.origen.titulo)
+      .filter(est => !est.esGuardia && est.origen && (est.origen.titulo || est.origen.url))
+      .map(est => est.origen.titulo || est.origen.url)
   )].sort();
 
   const s = stats.getStats(fechaDesde, fechaHasta, numerosPermitidos);
