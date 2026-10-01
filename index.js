@@ -627,10 +627,11 @@ const CATEGORIA_LABELS = {
   flujo_arrendatario: 'Arrendatarios',
 };
 
-function statsDetalleHref(categoria, fechaDesde, fechaHasta) {
+function statsDetalleHref(categoria, fechaDesde, fechaHasta, anuncio = null) {
   let href = `/stats/detalle?tipo=${categoria}`;
   if (fechaDesde) href += `&desde=${fechaDesde}`;
   if (fechaHasta) href += `&hasta=${fechaHasta}`;
+  if (anuncio) href += `&anuncio=${encodeURIComponent(anuncio)}`;
   return href;
 }
 
@@ -671,8 +672,25 @@ function renderComparacionPeriodo(cp) {
     </div>`;
 }
 
-function renderStatsPage(fechaDesde, fechaHasta) {
-  const s = stats.getStats(fechaDesde, fechaHasta);
+function renderStatsPage(fechaDesde, fechaHasta, anuncio = null) {
+  // Filtro por anuncio: reducir a solo los números que llegaron de ese origen
+  const todosLeds = memory.getAll();
+  const nicoleNumFilt = process.env.WHATSAPP_NICOLE || '';
+  const numerosPermitidos = anuncio
+    ? new Set(Object.entries(todosLeds)
+        .filter(([num, est]) => !est.esGuardia && num !== nicoleNumFilt &&
+          (est.origen?.titulo === anuncio || est.origen?.url === anuncio))
+        .map(([num]) => num))
+    : null;
+
+  // Anuncios únicos para el dropdown
+  const anunciosUnicos = [...new Set(
+    Object.values(todosLeds)
+      .filter(est => !est.esGuardia && est.origen?.titulo)
+      .map(est => est.origen.titulo)
+  )].sort();
+
+  const s = stats.getStats(fechaDesde, fechaHasta, numerosPermitidos);
   const desde = new Date(s.instaladoDesde).toLocaleDateString('es-EC');
   const actualizado = new Date().toLocaleString('es-EC');
 
@@ -694,7 +712,7 @@ function renderStatsPage(fechaDesde, fechaHasta) {
     arrendatario: 'Arrendatarios',
   };
   const filasFlujo = Object.entries(s.porFlujo)
-    .map(([flujo, cantidad]) => `<tr><td style="padding:4px 12px;"><a href="${statsDetalleHref('flujo_' + flujo, fechaDesde, fechaHasta)}" style="color:#2762EA;text-decoration:none;">${flujoLabels[flujo] || flujo}</a></td><td style="padding:4px 12px;text-align:right;font-weight:700;">${cantidad}</td></tr>`)
+    .map(([flujo, cantidad]) => `<tr><td style="padding:4px 12px;"><a href="${statsDetalleHref('flujo_' + flujo, fechaDesde, fechaHasta, anuncio)}" style="color:#2762EA;text-decoration:none;">${flujoLabels[flujo] || flujo}</a></td><td style="padding:4px 12px;text-align:right;font-weight:700;">${cantidad}</td></tr>`)
     .join('');
 
   const CIUDAD_ORDEN = ['Quito', 'Valles', 'Imbabura', 'Fuera de cobertura', 'Sin especificar'];
@@ -753,6 +771,10 @@ function renderStatsPage(fechaDesde, fechaHasta) {
             <input type="date" name="desde" value="${fechaDesde || ''}" style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;">
             <label style="font-size:13px;color:#555;">Hasta</label>
             <input type="date" name="hasta" value="${fechaHasta || ''}" style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;">
+            <select name="anuncio" style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;font-size:13px;max-width:220px;">
+              <option value="">📣 Todos los anuncios</option>
+              ${anunciosUnicos.map(a => `<option value="${a.replace(/"/g, '&quot;')}" ${anuncio === a ? 'selected' : ''}>${a}</option>`).join('')}
+            </select>
             <button type="submit" style="padding:6px 14px;border-radius:8px;border:none;background:#2762EA;color:white;cursor:pointer;">Filtrar</button>
             <a href="/stats" style="color:#2762EA;text-decoration:underline;">Ver todo</a>
           </form>
@@ -1413,8 +1435,9 @@ function startServer() {
     if (parsedUrl.pathname === '/stats') {
       const fechaDesde = parsedUrl.searchParams.get('desde') || null;
       const fechaHasta = parsedUrl.searchParams.get('hasta') || null;
+      const anuncio = parsedUrl.searchParams.get('anuncio') || null;
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(renderStatsPage(fechaDesde, fechaHasta));
+      res.end(renderStatsPage(fechaDesde, fechaHasta, anuncio));
       return;
     }
 

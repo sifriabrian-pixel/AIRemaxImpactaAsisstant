@@ -72,7 +72,7 @@ function clasificarCiudad(datos) {
   return 'Quito';
 }
 
-function calcularTasaLectura(fechaDesde, fechaHasta) {
+function calcularTasaLectura(fechaDesde, fechaHasta, numerosPermitidos = null) {
   const todos = memory.getAll();
   const nicoleNumero = process.env.WHATSAPP_NICOLE || '';
   let leidos = 0;
@@ -80,6 +80,7 @@ function calcularTasaLectura(fechaDesde, fechaHasta) {
 
   for (const [numero, estado] of Object.entries(todos)) {
     if (estado.esGuardia || numero === nicoleNumero) continue;
+    if (numerosPermitidos && !numerosPermitidos.has(numero)) continue;
     for (const m of estado.historial || []) {
       if (m.role !== 'assistant' || !m.estadoEnvio) continue;
       const d = (m.ts || '').slice(0, 10);
@@ -136,7 +137,7 @@ function compararPeriodos() {
   return { actual, anterior, cambioPorcentual };
 }
 
-function desgloseGeografico(fechaDesde, fechaHasta) {
+function desgloseGeografico(fechaDesde, fechaHasta, numerosPermitidos = null) {
   const todos = memory.getAll();
   const nicoleNumero = process.env.WHATSAPP_NICOLE || '';
   const filtrados = filtrarPorRango(events, fechaDesde, fechaHasta);
@@ -146,14 +147,16 @@ function desgloseGeografico(fechaDesde, fechaHasta) {
   for (const numero of numeros) {
     const estado = todos[numero];
     if (!estado || estado.esGuardia || numero === nicoleNumero) continue;
+    if (numerosPermitidos && !numerosPermitidos.has(numero)) continue;
     const ciudad = clasificarCiudad(estado.datos);
     conteo[ciudad] = (conteo[ciudad] || 0) + 1;
   }
   return conteo;
 }
 
-function getStats(fechaDesde, fechaHasta) {
-  const filtrados = filtrarPorRango(events, fechaDesde, fechaHasta);
+function getStats(fechaDesde, fechaHasta, numerosPermitidos = null) {
+  const filtrados = filtrarPorRango(events, fechaDesde, fechaHasta)
+    .filter(e => numerosPermitidos ? numerosPermitidos.has(e.numero) : true);
 
   const porTipo = (tipo) => filtrados.filter(e => e.tipo === tipo);
   const unicos = (lista) => new Set(lista.map(e => e.numero)).size;
@@ -181,13 +184,13 @@ function getStats(fechaDesde, fechaHasta) {
     porFlujo,
     instaladoDesde,
     tasaCalificacion,
-    tasaLectura: calcularTasaLectura(fechaDesde, fechaHasta),
+    tasaLectura: calcularTasaLectura(fechaDesde, fechaHasta, numerosPermitidos),
     tasaReactivacion,
     conSeguimiento,
     reactivados,
     serieTendencia: serieDiaria(14),
     comparacionPeriodo: compararPeriodos(),
-    desgloseCiudad: desgloseGeografico(fechaDesde, fechaHasta),
+    desgloseCiudad: desgloseGeografico(fechaDesde, fechaHasta, numerosPermitidos),
     // Categorías de negocio reales de Impacta (no venta/arriendo/compra/
     // alquiler como en Diamond): un propietario es una captación, un
     // comprador genera una venta, un arrendatario un alquiler.
