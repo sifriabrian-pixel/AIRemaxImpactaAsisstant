@@ -1085,6 +1085,7 @@ function renderTarjeta(numero, estado, numeroSeleccionado, miColumna) {
        data-sector="${(estado.datos?.sector || '').toLowerCase()}"
        data-operacion="${operacionFiltro(estado)}"
        data-sinrespuesta="${sinResp ? '1' : '0'}"
+       data-ts="${estado.ultimoMensaje || ''}"
        style="text-decoration:none;color:inherit;display:block;margin-bottom:8px;">
       <div style="background:white;border:1px solid ${activo ? '#2762EA' : '#e5e7eb'};${activo ? 'box-shadow:0 0 0 2px #2762EA33;' : ''}border-radius:10px;padding:10px 12px;">
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
@@ -1219,6 +1220,7 @@ function renderTarjetaInterna(numero, estado, numeroSeleccionado, miColumna) {
        class="tarjeta-lead"
        data-nombre="${nombre.toLowerCase()}"
        data-numero="${numero}"
+       data-ts="${estado.ultimoMensaje || ''}"
        style="text-decoration:none;color:inherit;display:block;margin-bottom:8px;">
       <div style="background:white;border:1px solid ${activo ? '#2762EA' : '#e5e7eb'};${activo ? 'box-shadow:0 0 0 2px #2762EA33;' : ''}border-radius:10px;padding:10px 12px;">
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
@@ -1335,6 +1337,16 @@ function renderConversacionesPage(numeroSeleccionado, columnaSeleccionada) {
               <label style="font-size:12px;color:#555;display:flex;align-items:center;gap:4px;cursor:pointer;">
                 <input id="filtroSinRespuesta" type="checkbox"> Sin respuesta
               </label>
+              <div style="display:flex;gap:6px;">
+                <button id="filtroHoy" data-periodo="hoy"
+                  style="font-size:12px;padding:5px 12px;border-radius:8px;border:1px solid #ddd;background:white;cursor:pointer;font-family:inherit;">
+                  📅 Hoy
+                </button>
+                <button id="filtro24h" data-periodo="24h"
+                  style="font-size:12px;padding:5px 12px;border-radius:8px;border:1px solid #ddd;background:white;cursor:pointer;font-family:inherit;">
+                  🕐 Últimas 24h
+                </button>
+              </div>
               <a href="#" id="limpiarFiltros" style="font-size:12px;color:#999;text-decoration:underline;">Limpiar filtros</a>
             </div>
 
@@ -1352,7 +1364,38 @@ function renderConversacionesPage(numeroSeleccionado, columnaSeleccionada) {
           const filtroOperacion = document.getElementById('filtroOperacion');
           const filtroSinRespuesta = document.getElementById('filtroSinRespuesta');
           const limpiarFiltros = document.getElementById('limpiarFiltros');
+          const btnHoy = document.getElementById('filtroHoy');
+          const btn24h = document.getElementById('filtro24h');
           const tarjetas = Array.from(document.querySelectorAll('.tarjeta-lead'));
+
+          let periodoActivo = null; // null | 'hoy' | '24h'
+
+          function activarPeriodo(periodo) {
+            periodoActivo = periodoActivo === periodo ? null : periodo;
+            const activo = '#2762EA';
+            const inactivo = '#ddd';
+            const bgActivo = '#EEF2FD';
+            btnHoy.style.borderColor  = periodoActivo === 'hoy' ? activo : inactivo;
+            btnHoy.style.background   = periodoActivo === 'hoy' ? bgActivo : 'white';
+            btnHoy.style.color        = periodoActivo === 'hoy' ? activo : '';
+            btn24h.style.borderColor  = periodoActivo === '24h' ? activo : inactivo;
+            btn24h.style.background   = periodoActivo === '24h' ? bgActivo : 'white';
+            btn24h.style.color        = periodoActivo === '24h' ? activo : '';
+            aplicarFiltros();
+          }
+
+          function dentroDelPeriodo(ts) {
+            if (!periodoActivo || !ts) return true;
+            const ahora = Date.now();
+            const t = new Date(ts).getTime();
+            if (periodoActivo === '24h') return ahora - t <= 24 * 60 * 60 * 1000;
+            if (periodoActivo === 'hoy') {
+              const hoy = new Date();
+              const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime();
+              return t >= inicio;
+            }
+            return true;
+          }
 
           function aplicarFiltros() {
             const texto = buscador.value.trim().toLowerCase();
@@ -1365,19 +1408,26 @@ function renderConversacionesPage(numeroSeleccionado, columnaSeleccionada) {
               const coincideSector = !sector || (t.dataset.sector || '').includes(sector);
               const coincideOperacion = !operacion || t.dataset.operacion === operacion;
               const coincideSinResp = !soloSinRespuesta || t.dataset.sinrespuesta === '1';
-              const visible = coincideTexto && coincideSector && coincideOperacion && coincideSinResp;
+              const coincidePeriodo = dentroDelPeriodo(t.dataset.ts);
+              const visible = coincideTexto && coincideSector && coincideOperacion && coincideSinResp && coincidePeriodo;
               t.style.display = visible ? 'block' : 'none';
             });
           }
 
           [buscador, filtroSector].forEach((el) => el.addEventListener('input', aplicarFiltros));
           [filtroOperacion, filtroSinRespuesta].forEach((el) => el.addEventListener('change', aplicarFiltros));
+          btnHoy.addEventListener('click', () => activarPeriodo('hoy'));
+          btn24h.addEventListener('click', () => activarPeriodo('24h'));
           limpiarFiltros.addEventListener('click', (e) => {
             e.preventDefault();
             buscador.value = '';
             filtroSector.value = '';
             filtroOperacion.value = '';
             filtroSinRespuesta.checked = false;
+            periodoActivo = null;
+            btnHoy.style.borderColor = btn24h.style.borderColor = '#ddd';
+            btnHoy.style.background  = btn24h.style.background  = 'white';
+            btnHoy.style.color       = btn24h.style.color       = '';
             aplicarFiltros();
           });
         </script>
