@@ -45,7 +45,7 @@ function getSheets() {
 function formatDate(date) {
   const d = String(date.getDate()).padStart(2, '0');
   const m = String(date.getMonth() + 1).padStart(2, '0');
-  const y = String(date.getFullYear()).slice(-2);
+  const y = String(date.getFullYear()); // 4 dígitos para coincidir con Google Sheets
   return `${d}/${m}/${y}`;
 }
 
@@ -64,12 +64,13 @@ async function buscarEnSheet(fecha, turno) {
       range: "'RE/MAX Impacta — Sistema de Guardias (TEMPLATE)'!A:D",
     });
     const rows = res.data.values || [];
-    // Normaliza fechas DD/M/YYYY → DD/MM/YYYY para tolerar ceros omitidos en la planilla
+    // Normaliza DD/M/YY o DD/M/YYYY → DD/MM/YYYY (4-digit year)
     const normalizarFecha = (f) => {
       if (!f) return '';
       const parts = f.split('/');
       if (parts.length !== 3) return f;
-      return parts[0].padStart(2, '0') + '/' + parts[1].padStart(2, '0') + '/' + parts[2];
+      const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+      return parts[0].padStart(2, '0') + '/' + parts[1].padStart(2, '0') + '/' + year;
     };
 
     let fechaActual = '';
