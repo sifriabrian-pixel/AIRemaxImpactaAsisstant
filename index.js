@@ -274,10 +274,11 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
       }
 
       case 'FOLLOWUP_ASESOR': {
+        // Rechazó explícitamente o es de otra ciudad → cerrar sin seguimientos
         memory.set(numeroLimpio, {
-          datos: { ...datos, descalificado: datos.descalificado || false },
+          datos: { ...datos, handoffListo: true, descalificado: true },
         });
-        console.log('[followup] Asesor registrado para follow-up');
+        console.log('[followup] Asesor descartado — sin seguimientos');
         break;
       }
 

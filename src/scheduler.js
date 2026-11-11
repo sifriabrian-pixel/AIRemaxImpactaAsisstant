@@ -4,16 +4,13 @@ const whatsapp = require('./whatsapp');
 const stats = require('./stats');
 const { getAsesorDeGuardia } = require('./guardias');
 
+// Después de estos eventos no tiene sentido enviar seguimientos de diciembre
+const EVENTO_FIN_MS = new Date('2026-12-04T00:00:00-05:00').getTime();
+
 function nicoleParam(texto) {
   return texto.replace(/\n+/g, ' | ').replace(/\s{5,}/g, '    ');
 }
 
-const IBARRA_KEYWORDS = ['ibarra', 'imbabura', 'otavalo', 'cotacachi', 'atuntaqui', 'antonio ante', 'pimampiro', 'urcuquí'];
-
-function sufijoCiudadTemplate(ciudad) {
-  if (ciudad && IBARRA_KEYWORDS.some(k => ciudad.toLowerCase().includes(k))) return 'ibarra';
-  return 'quito';
-}
 
 function init() {
   // Cada minuto: revisar follow-ups de propietarios fuera de horario
@@ -66,28 +63,13 @@ function init() {
         }
       }
 
-      if (estado.flujo === 'asesor' && !estado.datos?.handoffListo) {
+      if (estado.flujo === 'asesor' && !estado.datos?.handoffListo && ahora.getTime() < EVENTO_FIN_MS) {
         if (diff >= 72 && !estado.followup72h) {
           await enviarFollowup(numero, estado, '72h_asesor');
           memory.set(numero, { followup72h: true });
         } else if (diff >= 24 && !estado.followup24h) {
           await enviarFollowup(numero, estado, '24h_asesor');
           memory.set(numero, { followup24h: true });
-        }
-      }
-
-      // Recordatorios de entrevista agendada (24h y 4h antes)
-      if (estado.flujo === 'asesor' && estado.datos?.entrevistaConfirmada && estado.datos?.entrevistaFecha) {
-        const entrevistaMs = parseFechaHoraEntrevista(estado.datos.entrevistaFecha, estado.datos.entrevistaHora || '14:30');
-        if (entrevistaMs) {
-          const horasHasta = (entrevistaMs - ahora.getTime()) / (1000 * 60 * 60);
-          if (horasHasta > 0 && horasHasta <= 4 && !estado.recordatorio4h) {
-            await enviarFollowup(numero, estado, 'recordatorio_entrevista_4h');
-            memory.set(numero, { recordatorio4h: true });
-          } else if (horasHasta > 4 && horasHasta <= 25 && !estado.recordatorio24h) {
-            await enviarFollowup(numero, estado, 'recordatorio_entrevista_24h');
-            memory.set(numero, { recordatorio24h: true });
-          }
         }
       }
 
@@ -101,34 +83,19 @@ function init() {
   });
 }
 
-// fecha: DD/MM/YYYY, hora: HH:MM (Ecuador UTC-5 = UTC+0-5h → sumar 5h para obtener UTC)
-function parseFechaHoraEntrevista(fecha, hora) {
-  if (!fecha) return null;
-  const parts = fecha.split('/');
-  if (parts.length !== 3) return null;
-  const [d, m, y] = parts.map(Number);
-  const [h, min] = (hora || '14:30').split(':').map(Number);
-  return Date.UTC(y, m - 1, d, h + 5, min, 0);
-}
 
 async function enviarFollowup(numero, estado, tipo) {
   const nombre = estado.datos?.nombre || '';
   const sector = estado.datos?.sector || '';
-  const entrevistaFecha = estado.datos?.entrevistaFecha || '';
-  const entrevistaHora = estado.datos?.entrevistaHora || '14:30';
-  const ciudad = estado.datos?.ciudad || '';
-  const sufijo = sufijoCiudadTemplate(ciudad);
 
   const textosPorTipo = {
     '24h_propietario': `[Seguimiento automático 24h] Hola${nombre ? ' ' + nombre : ''}, ¿pudo revisar la información que le compartimos sobre vender su propiedad en ${sector || 'su zona'}? Quedamos a su disposición 🏠`,
-    '24h_asesor':      `[Seguimiento automático 24h] Hola${nombre ? ' ' + nombre : ''}, ¿tuvo oportunidad de revisar la información sobre unirse a RE/MAX Impacta? Con gusto le respondemos cualquier duda.`,
-    '72h_asesor':      `[Seguimiento automático 72h] Hola${nombre ? ' ' + nombre : ''}, seguimos interesados en su perfil. ¿Le gustaría retomar la conversación sobre su carrera inmobiliaria?`,
+    '24h_asesor':      `[Seguimiento automático 24h] Hola${nombre ? ' ' + nombre : ''}, ¿pudiste pensar si te animas a nuestro evento de diciembre? Todavía hay cupos — con gusto te confirmo los detalles.`,
+    '72h_asesor':      `[Seguimiento automático 72h] Hola${nombre ? ' ' + nombre : ''}, los eventos de diciembre (Ibarra y Quito) se acercan. Si quieres asistir, es el momento — los cupos son limitados.`,
     '7d_asesor':       `[Seguimiento automático 7d] Hola${nombre ? ' ' + nombre : ''}, hace una semana conversamos sobre la oportunidad en RE/MAX Impacta. ¿Sigue siendo de su interés?`,
     '30d_asesor':      `[Reactivación 30d] Hola${nombre ? ' ' + nombre : ''}, le escribimos desde RE/MAX Impacta. ¿Ha tenido oportunidad de evaluar unirse a nuestro equipo?`,
     '48h_propietario': `[Seguimiento automático 48h] ${nombre || 'Hola'}, solo quería asegurarme de que no quedó con dudas. Cuando quiera retomar, acá estamos 🏠`,
     '30d_cobertura':   `[Reactivación 30d] ¡Hola${nombre ? ' ' + nombre : ''}! Le escribo desde RE/MAX Impacta. ¿Su propiedad sigue disponible? Si la situación cambió y necesita apoyo, con gusto le orientamos 🏠`,
-    'recordatorio_entrevista_24h': `[Recordatorio 24h] Hola${nombre ? ' ' + nombre : ''} 👋 Le recuerdo su entrevista mañana${entrevistaFecha ? ' ' + entrevistaFecha : ''} a las ${entrevistaHora} en la oficina de RE/MAX IMPACTA (${sufijo}). ¿Confirma su asistencia?`,
-    'recordatorio_entrevista_4h':  `[Recordatorio 4h] ${nombre || 'Hola'}, en unas horas es su entrevista — hoy a las ${entrevistaHora} en la oficina de RE/MAX IMPACTA (${sufijo}). La espera Nicole Vinueza. ¿Todo listo para asistir?`,
   };
 
   // Todos los follow-ups usan plantillas aprobadas (obligatorio fuera de la ventana de 24hs)
@@ -141,8 +108,6 @@ async function enviarFollowup(numero, estado, tipo) {
     '72h_asesor':  () => whatsapp.sendTemplate(numero, 'seguimiento_asesor_72h',  'es_EC', { nombre: nombre || 'cliente' }),
     '7d_asesor':   () => whatsapp.sendTemplate(numero, 'seguimiento_asesor_7d',   'es_EC', { nombre: nombre || 'cliente' }),
     '30d_asesor':  () => whatsapp.sendTemplate(numero, 'reactivacion_asesor_30d', 'es_EC', { nombre: nombre || 'cliente' }),
-    'recordatorio_entrevista_24h': () => whatsapp.sendTemplate(numero, `recordatorio_entrevista_24h_${sufijo}`, 'es_EC', { nombre: nombre || 'candidato', fecha: entrevistaFecha || '', hora: entrevistaHora }),
-    'recordatorio_entrevista_4h':  () => whatsapp.sendTemplate(numero, `recordatorio_entrevista_4h_${sufijo}`,  'es_EC', { nombre: nombre || 'candidato', hora: entrevistaHora }),
   };
 
   if (plantillas[tipo]) {
