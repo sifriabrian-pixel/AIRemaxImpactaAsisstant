@@ -34,7 +34,7 @@ function init() {
           if (nicoleNumero) {
             try {
               const resumen = formatResumenPropietario(numero, estado.datos);
-              const msgNicole = `📋 CAPTACIÓN — Sin asesor de guardia disponible\n\n` + resumen;
+              const msgNicole = `📋 CAPTACIÓN — ${estado.datos?.nombre || numero} · sin asesor disponible\n\n` + resumen;
               await whatsapp.sendTemplate(nicoleNumero, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(msgNicole) });
               console.log(`[scheduler] Nicole notificada por lead sin asesor: ${numero}`);
             } catch (e) {
@@ -142,7 +142,7 @@ async function enviarResumenPropietario(asesor, numeroLead, datos) {
   const nicoleNumero = process.env.WHATSAPP_NICOLE;
   if (nicoleNumero) {
     try {
-      const msgNicole = `📋 CAPTACIÓN — Lead derivado a ${asesor.nombre}\n\n` + resumen;
+      const msgNicole = `📋 CAPTACIÓN — ${datos.nombre || numeroLead} → ${asesor.nombre}\n\n` + resumen;
       await whatsapp.sendTemplate(nicoleNumero, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(msgNicole) });
       console.log(`[scheduler] Resumen propietario enviado a Nicole`);
     } catch (e) {

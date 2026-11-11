@@ -188,7 +188,7 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
           // Notificar a Nicole con el asesor asignado
           if (process.env.WHATSAPP_NICOLE) {
             try {
-              const resumenNicole = `📋 CAPTACIÓN — Lead derivado a ${asesor.nombre}\n\n` + resumen;
+              const resumenNicole = `📋 CAPTACIÓN — ${datos.nombre || numeroLimpio} → ${asesor.nombre}\n\n` + resumen;
               await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(resumenNicole) });
               memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', resumenNicole);
             } catch (e) {
@@ -207,7 +207,7 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
           console.log('[handoff] Fuera de horario — lead encolado');
           if (process.env.WHATSAPP_NICOLE) {
             try {
-              const resumenNicole = `📋 CAPTACIÓN — Fuera de horario (sin asesor asignado)\n\n` + scheduler.formatResumenPropietario(numeroLimpio, datos);
+              const resumenNicole = `📋 CAPTACIÓN — ${datos.nombre || numeroLimpio} · fuera de horario\n\n` + scheduler.formatResumenPropietario(numeroLimpio, datos);
               await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(resumenNicole) });
               memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', resumenNicole);
             } catch (e) {
@@ -222,7 +222,7 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         const resumenImbabura = scheduler.formatResumenPropietario(numeroLimpio, { ...datos, zona: 'Imbabura' });
         if (process.env.WHATSAPP_NICOLE) {
           try {
-            const msgImbabura = `📋 CAPTACIÓN — Imbabura\n\n` + resumenImbabura;
+            const msgImbabura = `📋 CAPTACIÓN — ${datos.nombre || numeroLimpio} · Imbabura\n\n` + resumenImbabura;
             await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(msgImbabura) });
             memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', msgImbabura);
             console.log(`[handoff] Propietario Imbabura enviado a Nicole`);
@@ -343,7 +343,7 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
           console.log(`[handoff] Comprador derivado a ${asesorC.nombre}`);
           if (process.env.WHATSAPP_NICOLE) {
             try {
-              const resumenNicole = `🔔 COMPRADOR — Lead derivado a ${asesorC.nombre}\n\n` + resumenC;
+              const resumenNicole = `🔔 COMPRADOR — ${datos.nombre || numeroLimpio} → ${asesorC.nombre}\n\n` + resumenC;
               await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(resumenNicole) });
               memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', resumenNicole);
             } catch (e) {
@@ -355,7 +355,7 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
           console.log('[handoff] Comprador fuera de horario — encolado');
           if (process.env.WHATSAPP_NICOLE) {
             try {
-              const resumenNicole = `🔔 COMPRADOR — Fuera de horario (sin asesor asignado)\n\n` + resumenC;
+              const resumenNicole = `🔔 COMPRADOR — ${datos.nombre || numeroLimpio} · fuera de horario\n\n` + resumenC;
               await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(resumenNicole) });
               memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', resumenNicole);
             } catch (e) {
@@ -378,7 +378,7 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
           console.log(`[handoff] Arrendatario derivado a ${asesorA.nombre}`);
           if (process.env.WHATSAPP_NICOLE) {
             try {
-              const resumenNicole = `🔔 ARRENDATARIO — Lead derivado a ${asesorA.nombre}\n\n` + resumenA;
+              const resumenNicole = `🔔 ARRENDATARIO — ${datos.nombre || numeroLimpio} → ${asesorA.nombre}\n\n` + resumenA;
               await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(resumenNicole) });
               memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', resumenNicole);
             } catch (e) {
@@ -390,7 +390,7 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
           console.log('[handoff] Arrendatario fuera de horario — encolado');
           if (process.env.WHATSAPP_NICOLE) {
             try {
-              const resumenNicole = `🔔 ARRENDATARIO — Fuera de horario (sin asesor asignado)\n\n` + resumenA;
+              const resumenNicole = `🔔 ARRENDATARIO — ${datos.nombre || numeroLimpio} · fuera de horario\n\n` + resumenA;
               await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(resumenNicole) });
               memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', resumenNicole);
             } catch (e) {
