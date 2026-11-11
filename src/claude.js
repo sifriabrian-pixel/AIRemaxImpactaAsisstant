@@ -42,17 +42,10 @@ const SCHEMAS = {
   "observacion": "contexto relevante para el asesor, máximo 1 oración"
 }`,
   asesor: `{
-  "nombre": "nombre completo",
-  "edad": "edad si fue mencionada o null",
-  "ciudad": "ciudad o sector donde vive",
-  "experiencia": "experiencia previa en ventas o áreas comerciales o null",
-  "situacion": "situación laboral actual o null",
-  "disponibilidad": "inmediata / parcial / no tiene",
-  "motivacion": "motivación principal expresada",
-  "descalificado": "true si fue descalificado, false si calificó",
-  "entrevistaConfirmada": "true si el candidato confirmó asistir a la entrevista, false si no",
-  "entrevistaFecha": "fecha exacta de la entrevista confirmada en formato DD/MM/YYYY o null",
-  "entrevistaHora": "hora de la entrevista confirmada (ej: 14:30) o null"
+  "nombre": "nombre completo si fue mencionado",
+  "ciudad": "Ibarra o Quito según el evento que eligió el candidato",
+  "asistenciaConfirmada": "true si confirmó asistir al evento de diciembre, false si no",
+  "descalificado": "true si indicó que no puede asistir ni está interesado, false en caso contrario"
 }`,
   comprador: `{
   "nombre": "nombre completo si fue mencionado",

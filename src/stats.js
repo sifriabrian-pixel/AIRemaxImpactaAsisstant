@@ -45,6 +45,8 @@ const HANDOFF_TIPOS = [
   'handoff_comprador',
   'handoff_arrendatario',
   'handoff_general',
+  'asistencia_confirmada_ibarra',
+  'asistencia_confirmada_quito',
 ];
 
 const FLUJO_TIPOS = ['propietario', 'asesor', 'comprador', 'arrendatario'];
@@ -213,6 +215,7 @@ const CATEGORIAS = {
   flujo_asesor: ['flujo_asesor'],
   flujo_comprador: ['flujo_comprador'],
   flujo_arrendatario: ['flujo_arrendatario'],
+  asistencias: ['asistencia_confirmada_ibarra', 'asistencia_confirmada_quito'],
 };
 
 function listarPorCategoria(categoria, fechaDesde, fechaHasta) {

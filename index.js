@@ -32,8 +32,9 @@ const QUALIFICATION = {
     required: ['sector', 'disponibilidad'],
     exclude: ['fueraCobertura'],
   },
+  // Dic 2026: flujo de evento — entrevistaConfirmada reemplazada por asistenciaConfirmada
   asesor: {
-    required: ['entrevistaConfirmada'],
+    required: ['asistenciaConfirmada'],
     exclude: ['descalificado'],
   },
 };
@@ -56,7 +57,12 @@ function resolverTriggerPorFlujo(estado) {
       const esImbabura = IBARRA_KEYWORDS_IDX.some(k => zona.includes(k));
       return esImbabura ? 'HANDOFF_IMBABURA_NICOLE' : 'HANDOFF_PROPIETARIO';
     }
-    case 'asesor':       return 'AGENDA_ENTREVISTA';
+    case 'asesor': {
+      const ciudad = (d.ciudad || '').toLowerCase();
+      return ciudad.includes('ibarra') || ciudad.includes('imbabura')
+        ? 'ASISTENCIA_CONFIRMADA_IBARRA'
+        : 'ASISTENCIA_CONFIRMADA_QUITO';
+    }
     case 'comprador':    return 'HANDOFF_COMPRADOR';
     case 'arrendatario': return 'HANDOFF_ARRENDATARIO';
     default:             return null;
@@ -84,6 +90,8 @@ const TRIGGERS = [
   'HANDOFF_ASESOR',
   'FOLLOWUP_ASESOR',
   'AGENDA_ENTREVISTA',
+  'ASISTENCIA_CONFIRMADA_IBARRA',
+  'ASISTENCIA_CONFIRMADA_QUITO',
   'HANDOFF_COMPRADOR',
   'HANDOFF_ARRENDATARIO',
   'HANDOFF_GENERAL',
@@ -285,6 +293,40 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
             console.log(`[handoff] Entrevista asesor agendada — Nicole notificada. Fecha: ${datos.entrevistaFecha || 'sin fecha'}`);
           } catch (e) {
             console.error(`[handoff] FALLO notificación a Nicole (agenda entrevista):`, e.message);
+          }
+        }
+        break;
+      }
+
+      case 'ASISTENCIA_CONFIRMADA_IBARRA': {
+        memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+        stats.logEvent('asistencia_confirmada_ibarra', numeroLimpio);
+        if (process.env.WHATSAPP_NICOLE) {
+          try {
+            const nombre = datos.nombre || numeroLimpio;
+            const msg = `✅ ASISTENCIA CONFIRMADA — IBARRA\n\nDesayunando con el Éxito\nMiérc. 2 dic · 10:00 a.m.\nGermán Grijalva y Sánchez y Cifuentes, Ibarra\n\nContacto: ${nombre} · ${numeroLimpio}`;
+            await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(msg) });
+            memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', msg);
+            console.log(`[handoff] Asistencia Ibarra confirmada — Nicole notificada. Contacto: ${nombre}`);
+          } catch (e) {
+            console.error(`[handoff] FALLO notificación a Nicole (asistencia Ibarra):`, e.message);
+          }
+        }
+        break;
+      }
+
+      case 'ASISTENCIA_CONFIRMADA_QUITO': {
+        memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+        stats.logEvent('asistencia_confirmada_quito', numeroLimpio);
+        if (process.env.WHATSAPP_NICOLE) {
+          try {
+            const nombre = datos.nombre || numeroLimpio;
+            const msg = `✅ ASISTENCIA CONFIRMADA — QUITO\n\nUn Break con el Éxito\nJuev. 3 dic · 2:00 p.m.\nAv. América, C.C. La Y, Quito\n\nContacto: ${nombre} · ${numeroLimpio}`;
+            await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(msg) });
+            memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', msg);
+            console.log(`[handoff] Asistencia Quito confirmada — Nicole notificada. Contacto: ${nombre}`);
+          } catch (e) {
+            console.error(`[handoff] FALLO notificación a Nicole (asistencia Quito):`, e.message);
           }
         }
         break;
@@ -546,7 +588,7 @@ async function procesarMensaje(numeroLimpio, texto, referral) {
   }
 
   // Procesar trigger principal (excluye CONSENT_GRANTED que ya fue manejado arriba)
-  const HANDOFF_TRIGGERS = ['HANDOFF_PROPIETARIO', 'HANDOFF_IMBABURA_NICOLE', 'HANDOFF_ASESOR', 'HANDOFF_COMPRADOR', 'HANDOFF_ARRENDATARIO', 'HANDOFF_GENERAL', 'AGENDA_ENTREVISTA'];
+  const HANDOFF_TRIGGERS = ['HANDOFF_PROPIETARIO', 'HANDOFF_IMBABURA_NICOLE', 'HANDOFF_ASESOR', 'HANDOFF_COMPRADOR', 'HANDOFF_ARRENDATARIO', 'HANDOFF_GENERAL', 'AGENDA_ENTREVISTA', 'ASISTENCIA_CONFIRMADA_IBARRA', 'ASISTENCIA_CONFIRMADA_QUITO'];
   if (trigger && trigger !== 'CONSENT_GRANTED') {
     const estadoActual = memory.get(numeroLimpio);
 
