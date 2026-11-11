@@ -304,8 +304,8 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         stats.logEvent('asistencia_confirmada_ibarra', numeroLimpio);
         if (process.env.WHATSAPP_NICOLE) {
           try {
-            const nombre = datos.nombre || numeroLimpio;
-            const msg = `✅ ASISTENCIA CONFIRMADA — IBARRA\n\nDesayunando con el Éxito\nMiérc. 2 dic · 10:00 a.m.\nGermán Grijalva y Sánchez y Cifuentes, Ibarra\n\nContacto: ${nombre} · ${numeroLimpio}`;
+            const nombre = datos.nombre || '';
+            const msg = `✅ ASISTENCIA CONFIRMADA — IBARRA\n\nDesayunando con el Éxito\nMiérc. 2 dic · 10:00 a.m.\nGermán Grijalva y Sánchez y Cifuentes, Ibarra\n\nContacto: ${nombre ? nombre + ' · ' : ''}${numeroLimpio}`;
             await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(msg) });
             memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', msg);
             console.log(`[handoff] Asistencia Ibarra confirmada — Nicole notificada. Contacto: ${nombre}`);
@@ -321,8 +321,8 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
         stats.logEvent('asistencia_confirmada_quito', numeroLimpio);
         if (process.env.WHATSAPP_NICOLE) {
           try {
-            const nombre = datos.nombre || numeroLimpio;
-            const msg = `✅ ASISTENCIA CONFIRMADA — QUITO\n\nUn Break con el Éxito\nJuev. 3 dic · 2:00 p.m.\nAv. América, C.C. La Y, Quito\n\nContacto: ${nombre} · ${numeroLimpio}`;
+            const nombre = datos.nombre || '';
+            const msg = `✅ ASISTENCIA CONFIRMADA — QUITO\n\nUn Break con el Éxito\nJuev. 3 dic · 2:00 p.m.\nAv. América, C.C. La Y, Quito\n\nContacto: ${nombre ? nombre + ' · ' : ''}${numeroLimpio}`;
             await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(msg) });
             memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', msg);
             console.log(`[handoff] Asistencia Quito confirmada — Nicole notificada. Contacto: ${nombre}`);
