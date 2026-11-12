@@ -438,7 +438,7 @@ function handleOverrideCommand(texto, numeroLimpio) {
 async function recibirDocumentoCandidato(numeroLimpio, tipo, mediaId) {
   const estado = memory.get(numeroLimpio);
   // Solo candidatos del flujo asesor que ya completaron el proceso
-  if (estado.flujo !== 'asesor' || !estado.datos?.handoffListo) return;
+  if (estado.flujo !== 'evento' || !estado.datos?.handoffListo) return;
 
   const nombre = estado.datos?.nombre || '';
   const fecha = estado.datos?.entrevistaFecha ? ` el ${estado.datos.entrevistaFecha}` : '';
@@ -564,7 +564,7 @@ async function procesarMensaje(numeroLimpio, texto, referral) {
   // Detectar el flujo apenas se identifica (para que el dashboard lo muestre desde el primer mensaje)
   const FLUJO_TAGS = {
     FLUJO_PROPIETARIO: 'propietario',
-    FLUJO_ASESOR: 'asesor',
+    FLUJO_ASESOR: 'evento',
     FLUJO_COMPRADOR: 'comprador',
     FLUJO_ARRENDATARIO: 'arrendatario',
   };
@@ -666,7 +666,7 @@ const CATEGORIA_LABELS = {
   fuera_horario: 'Fuera de horario',
   reactivados: 'Leads reactivados',
   flujo_propietario: 'Propietarios',
-  flujo_asesor: 'Prospectos asesor',
+  flujo_evento: 'Eventos diciembre',
   flujo_comprador: 'Compradores',
   flujo_arrendatario: 'Arrendatarios',
 };

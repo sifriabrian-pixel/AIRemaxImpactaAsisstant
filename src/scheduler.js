@@ -63,7 +63,7 @@ function init() {
         }
       }
 
-      if (estado.flujo === 'asesor' && !estado.datos?.handoffListo && ahora.getTime() < EVENTO_FIN_MS) {
+      if (estado.flujo === 'evento' && !estado.datos?.handoffListo && ahora.getTime() < EVENTO_FIN_MS) {
         if (diff >= 72 && !estado.followup72h) {
           await enviarFollowup(numero, estado, '72h_asesor');
           memory.set(numero, { followup72h: true });

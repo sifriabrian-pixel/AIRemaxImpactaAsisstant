@@ -49,7 +49,7 @@ const HANDOFF_TIPOS = [
   'asistencia_confirmada_quito',
 ];
 
-const FLUJO_TIPOS = ['propietario', 'asesor', 'comprador', 'arrendatario'];
+const FLUJO_TIPOS = ['propietario', 'evento', 'comprador', 'arrendatario'];
 
 function filtrarPorRango(evts, fechaDesde, fechaHasta) {
   return evts.filter(e => {
@@ -200,7 +200,7 @@ function getStats(fechaDesde, fechaHasta, numerosPermitidos = null) {
       captacion: porFlujo.propietario,
       venta: porFlujo.comprador,
       alquiler: porFlujo.arrendatario,
-      asesores: porFlujo.asesor,
+      asesores: porFlujo.evento,
     },
   };
 }
@@ -212,7 +212,7 @@ const CATEGORIAS = {
   fuera_horario: ['fuera_horario'],
   reactivados: ['reactivado'],
   flujo_propietario: ['flujo_propietario'],
-  flujo_asesor: ['flujo_asesor'],
+  flujo_evento: ['flujo_evento'],
   flujo_comprador: ['flujo_comprador'],
   flujo_arrendatario: ['flujo_arrendatario'],
   asistencias: ['asistencia_confirmada_ibarra', 'asistencia_confirmada_quito'],
