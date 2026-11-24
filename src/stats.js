@@ -215,7 +215,8 @@ const CATEGORIAS = {
   flujo_evento: ['flujo_evento'],
   flujo_comprador: ['flujo_comprador'],
   flujo_arrendatario: ['flujo_arrendatario'],
-  asistencias: ['asistencia_confirmada_ibarra', 'asistencia_confirmada_quito'],
+  asistencias: ['asistencia_confirmada_ibarra', 'asistencia_confirmada_quito', 'lista_espera'],
+  lista_espera: ['lista_espera'],
 };
 
 function listarPorCategoria(categoria, fechaDesde, fechaHasta) {

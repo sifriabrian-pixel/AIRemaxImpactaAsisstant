@@ -92,6 +92,7 @@ const TRIGGERS = [
   'AGENDA_ENTREVISTA',
   'ASISTENCIA_CONFIRMADA_IBARRA',
   'ASISTENCIA_CONFIRMADA_QUITO',
+  'LISTA_ESPERA',
   'HANDOFF_COMPRADOR',
   'HANDOFF_ARRENDATARIO',
   'HANDOFF_GENERAL',
@@ -328,6 +329,24 @@ async function handleTrigger(trigger, numeroLimpio, datos) {
             console.log(`[handoff] Asistencia Quito confirmada — Nicole notificada. Contacto: ${nombre}`);
           } catch (e) {
             console.error(`[handoff] FALLO notificación a Nicole (asistencia Quito):`, e.message);
+          }
+        }
+        break;
+      }
+
+      case 'LISTA_ESPERA': {
+        memory.set(numeroLimpio, { datos: { ...datos, handoffListo: true } });
+        stats.logEvent('lista_espera', numeroLimpio);
+        if (process.env.WHATSAPP_NICOLE) {
+          try {
+            const nombre = datos.nombre || '';
+            const ciudad = datos.ciudad || 'ciudad no especificada';
+            const msg = `📋 LISTA DE ESPERA — ${nombre ? nombre + ' · ' : ''}${numeroLimpio}\n\nCiudad: ${ciudad}\nSolicitó ser anotado si se libera un cupo en el evento de diciembre.`;
+            await whatsapp.sendTemplate(process.env.WHATSAPP_NICOLE, 'notificacion_lead_nicole_v2', 'es_EC', { '1': nicoleParam(msg) });
+            memory.addMessage(process.env.WHATSAPP_NICOLE, 'assistant', msg);
+            console.log(`[handoff] Lista de espera registrada — Nicole notificada. Contacto: ${nombre || numeroLimpio}`);
+          } catch (e) {
+            console.error(`[handoff] FALLO notificación a Nicole (lista espera):`, e.message);
           }
         }
         break;
